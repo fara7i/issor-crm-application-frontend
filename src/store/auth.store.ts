@@ -1,77 +1,137 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { User, UserRole } from "@/types";
-import { mockUsers } from "@/lib/mock-data";
+import { authAPI } from "@/lib/api-client";
+
+type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SHOP_AGENT' | 'WAREHOUSE_AGENT' | 'CONFIRMER';
+
+interface User {
+  id: number;
+  email: string;
+  name: string | null;
+  role: UserRole;
+}
 
 interface AuthState {
   user: User | null;
+  token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  error: string | null;
   login: (email: string, password: string) => Promise<boolean>;
-  loginWithRole: (role: UserRole) => void;
+  loginWithRole: (role: UserRole) => Promise<void>;
   logout: () => void;
   setLoading: (loading: boolean) => void;
+  checkAuth: () => Promise<void>;
 }
+
+// Demo credentials mapping
+const DEMO_CREDENTIALS: Record<UserRole, { email: string; password: string }> = {
+  SUPER_ADMIN: { email: 'superadmin@magazine.ma', password: 'Admin123!' },
+  ADMIN: { email: 'admin@magazine.ma', password: 'Admin123!' },
+  SHOP_AGENT: { email: 'shop@magazine.ma', password: 'Shop123!' },
+  WAREHOUSE_AGENT: { email: 'warehouse@magazine.ma', password: 'Warehouse123!' },
+  CONFIRMER: { email: 'confirmer@magazine.ma', password: 'Confirm123!' },
+};
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
+      token: null,
       isAuthenticated: false,
       isLoading: false,
+      error: null,
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       login: async (email: string, password: string) => {
-        set({ isLoading: true });
+        set({ isLoading: true, error: null });
 
-        // Simulate API call delay (password will be used in production)
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        try {
+          const response = await authAPI.login(email, password);
 
-        // Find user by email (mock authentication)
-        const user = mockUsers.find(
-          (u) => u.email.toLowerCase() === email.toLowerCase()
-        );
+          // Store token in localStorage for API client to use
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('auth_token', response.token);
+          }
 
-        if (user) {
           set({
-            user: { ...user, lastLogin: new Date() },
+            user: response.user as User,
+            token: response.token,
             isAuthenticated: true,
             isLoading: false,
+            error: null,
           });
-          return true;
-        }
 
-        set({ isLoading: false });
-        return false;
+          return true;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Login failed';
+          set({
+            user: null,
+            token: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: message,
+          });
+          return false;
+        }
       },
 
-      loginWithRole: (role: UserRole) => {
-        const user = mockUsers.find((u) => u.role === role);
-        if (user) {
-          set({
-            user: { ...user, lastLogin: new Date() },
-            isAuthenticated: true,
-          });
+      loginWithRole: async (role: UserRole) => {
+        const credentials = DEMO_CREDENTIALS[role];
+        if (credentials) {
+          await get().login(credentials.email, credentials.password);
         }
       },
 
       logout: () => {
+        // Remove token from localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('auth_token');
+        }
+
         set({
           user: null,
+          token: null,
           isAuthenticated: false,
+          error: null,
         });
       },
 
       setLoading: (loading: boolean) => {
         set({ isLoading: loading });
       },
+
+      checkAuth: async () => {
+        const token = get().token;
+        if (!token) {
+          set({ isAuthenticated: false, user: null });
+          return;
+        }
+
+        try {
+          const response = await authAPI.getMe();
+          set({
+            user: response.user as User,
+            isAuthenticated: true,
+          });
+        } catch {
+          // Token invalid or expired
+          get().logout();
+        }
+      },
     }),
     {
       name: "auth-storage",
       partialize: (state) => ({
         user: state.user,
+        token: state.token,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        // Restore token to localStorage on rehydration
+        if (state?.token && typeof window !== 'undefined') {
+          localStorage.setItem('auth_token', state.token);
+        }
+      },
     }
   )
 );
