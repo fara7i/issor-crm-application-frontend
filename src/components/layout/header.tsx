@@ -210,9 +210,9 @@ export function Header({ sidebarCollapsed }: HeaderProps) {
                 <div className="border-t border-white/10 p-4">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-9 w-9">
-                      <AvatarImage src={user.avatar} alt={user.name} />
+                      <AvatarImage src={undefined} alt={user.name || ''} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
-                        {user.name
+                        {(user.name || 'U')
                           .split(" ")
                           .map((n) => n[0])
                           .join("")}
@@ -220,7 +220,7 @@ export function Header({ sidebarCollapsed }: HeaderProps) {
                     </Avatar>
                     <div className="flex-1 overflow-hidden">
                       <p className="truncate text-sm font-medium text-sidebar-foreground">
-                        {user.name}
+                        {user.name || 'User'}
                       </p>
                       <p className="truncate text-xs text-sidebar-foreground/60">
                         {user.role.replace("_", " ")}
@@ -277,7 +277,7 @@ export function Header({ sidebarCollapsed }: HeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-9 w-9 rounded-full">
               <Avatar className="h-9 w-9">
-                <AvatarImage src={user?.avatar} alt={user?.name} />
+                <AvatarImage src={undefined} alt={user?.name || ''} />
                 <AvatarFallback className="bg-primary text-primary-foreground">
                   {user?.name
                     ?.split(" ")

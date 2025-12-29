@@ -205,9 +205,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               )}
             >
               <Avatar className="h-9 w-9">
-                <AvatarImage src={user.avatar} alt={user.name} />
+                <AvatarImage src={undefined} alt={user.name || ''} />
                 <AvatarFallback className="bg-primary text-primary-foreground">
-                  {user.name
+                  {(user.name || 'U')
                     .split(" ")
                     .map((n) => n[0])
                     .join("")}
@@ -215,7 +215,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               </Avatar>
               {!collapsed && (
                 <div className="flex-1 overflow-hidden">
-                  <p className="truncate text-sm font-medium">{user.name}</p>
+                  <p className="truncate text-sm font-medium">{user.name || 'User'}</p>
                   <p className="truncate text-xs text-sidebar-foreground/60">
                     {user.role.replace("_", " ")}
                   </p>
