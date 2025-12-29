@@ -1079,10 +1079,53 @@ export const salariesApi = {
   },
 };
 
+// Map frontend charge category to backend type
+const chargeCategoryToType: Record<string, string> = {
+  'Lawyer': 'LAWYER',
+  'Water Bill': 'WATER_BILL',
+  'Electricity': 'ELECTRICITY_BILL',
+  'Broken Parts': 'BROKEN_PARTS',
+  'Maintenance': 'MAINTENANCE',
+  'Rent': 'RENT',
+  'Other': 'OTHER',
+};
+
+// Map backend type to frontend category
+const chargeTypeToCategory: Record<string, string> = {
+  'LAWYER': 'Lawyer',
+  'WATER_BILL': 'Water Bill',
+  'ELECTRICITY_BILL': 'Electricity',
+  'BROKEN_PARTS': 'Broken Parts',
+  'MAINTENANCE': 'Other',
+  'RENT': 'Other',
+  'OTHER': 'Other',
+};
+
+// Map frontend platform to backend platform (uppercase)
+const platformToBackend: Record<string, string> = {
+  'Facebook': 'FACEBOOK',
+  'Instagram': 'INSTAGRAM',
+  'Google': 'GOOGLE',
+  'TikTok': 'TIKTOK',
+  'YouTube': 'OTHER',
+  'Snapchat': 'SNAPCHAT',
+  'Other': 'OTHER',
+};
+
+// Map backend platform to frontend platform
+const platformToFrontend: Record<string, string> = {
+  'FACEBOOK': 'Facebook',
+  'INSTAGRAM': 'Instagram',
+  'GOOGLE': 'Google',
+  'TIKTOK': 'TikTok',
+  'SNAPCHAT': 'Other',
+  'OTHER': 'Other',
+};
+
 export const chargesApi = {
   getAll: async (filters?: { category?: string; dateFrom?: Date; dateTo?: Date }) => {
     const result = await chargesAPI.getAll({
-      type: filters?.category,
+      type: filters?.category ? chargeCategoryToType[filters.category] || filters.category : undefined,
       fromDate: filters?.dateFrom?.toISOString().split('T')[0],
       toDate: filters?.dateTo?.toISOString().split('T')[0],
     });
@@ -1098,7 +1141,7 @@ export const chargesApi = {
       createdAt: string;
     }>).map(charge => ({
       id: String(charge.id),
-      category: charge.type as 'Lawyer' | 'Water Bill' | 'Electricity' | 'Broken Parts' | 'Other',
+      category: (chargeTypeToCategory[charge.type] || 'Other') as 'Lawyer' | 'Water Bill' | 'Electricity' | 'Broken Parts' | 'Other',
       customCategory: charge.customType || undefined,
       amount: parseFloat(charge.amount),
       description: charge.description || '',
@@ -1117,7 +1160,7 @@ export const chargesApi = {
   create: async (data: { category: string; customCategory?: string; amount: number; description: string; date: Date }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
     try {
       const result = await chargesAPI.create({
-        type: data.category,
+        type: chargeCategoryToType[data.category] || 'OTHER',
         customType: data.customCategory,
         amount: data.amount,
         description: data.description,
@@ -1132,7 +1175,7 @@ export const chargesApi = {
   update: async (id: string, data: Partial<{ category: string; customCategory: string; amount: number; description: string; date: Date }>): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
     try {
       const result = await chargesAPI.update(parseInt(id), {
-        type: data.category,
+        type: data.category ? chargeCategoryToType[data.category] || 'OTHER' : undefined,
         customType: data.customCategory,
         amount: data.amount,
         description: data.description,
@@ -1180,7 +1223,7 @@ export const adsApi = {
     }>).map(ad => ({
       id: String(ad.id),
       name: ad.campaignName,
-      platform: ad.platform as 'Facebook' | 'Instagram' | 'Google' | 'TikTok' | 'YouTube' | 'Other',
+      platform: (platformToFrontend[ad.platform] || 'Other') as 'Facebook' | 'Instagram' | 'Google' | 'TikTok' | 'YouTube' | 'Other',
       cost: parseFloat(ad.cost),
       results: ad.results || 0,
       costPerResult: ad.costPerResult ? parseFloat(ad.costPerResult) : 0,
@@ -1201,7 +1244,7 @@ export const adsApi = {
     try {
       const result = await adsCostsAPI.create({
         campaignName: data.name,
-        platform: data.platform,
+        platform: platformToBackend[data.platform] || 'OTHER',
         cost: data.cost,
         results: data.results,
         campaignDate: data.startDate.toISOString().split('T')[0],
@@ -1216,7 +1259,7 @@ export const adsApi = {
     try {
       const result = await adsCostsAPI.update(parseInt(id), {
         campaignName: data.name,
-        platform: data.platform,
+        platform: data.platform ? platformToBackend[data.platform] || 'OTHER' : undefined,
         cost: data.cost,
         results: data.results,
         campaignDate: data.startDate?.toISOString().split('T')[0],
@@ -1246,7 +1289,7 @@ export const adminsApi = {
       id: String(admin.id),
       name: admin.name || '',
       email: admin.email,
-      role: admin.role as 'ADMIN',
+      role: admin.role as 'SUPER_ADMIN' | 'ADMIN' | 'SHOP_AGENT' | 'WAREHOUSE_AGENT' | 'CONFIRMER',
       status: admin.isActive ? 'ACTIVE' as const : 'INACTIVE' as const,
       createdAt: new Date(admin.createdAt),
       lastLogin: undefined,
@@ -1259,24 +1302,26 @@ export const adminsApi = {
       totalPages: result.totalPages,
     };
   },
-  create: async (data: { name: string; email: string; password: string }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+  create: async (data: { name: string; email: string; password: string; role?: string }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
     try {
       const result = await adminsAPI.create({
-        ...data,
-        role: 'ADMIN',
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        role: data.role || 'ADMIN',
       });
-      return { success: true, data: result.admin, message: 'Admin created successfully' };
+      return { success: true, data: result.admin, message: 'User created successfully' };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create admin';
+      const message = err instanceof Error ? err.message : 'Failed to create user';
       return { success: false, error: message };
     }
   },
-  update: async (id: string, data: Partial<{ name: string; email: string; password: string }>): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+  update: async (id: string, data: Partial<{ name: string; email: string; password: string; role: string }>): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
     try {
       const result = await adminsAPI.update(parseInt(id), data);
-      return { success: true, data: result.admin, message: 'Admin updated successfully' };
+      return { success: true, data: result.admin, message: 'User updated successfully' };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update admin';
+      const message = err instanceof Error ? err.message : 'Failed to update user';
       return { success: false, error: message };
     }
   },
