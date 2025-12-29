@@ -1,774 +1,1367 @@
-import { delay } from "./utils";
-import {
-  mockProducts,
-  mockStock,
-  mockStockHistory,
-  mockOrders,
-  mockSalaries,
-  mockCharges,
-  mockAdCampaigns,
-  mockAdminUsers,
-  mockSalesData,
-  mockTopProducts,
-} from "./mock-data";
-import {
-  Product,
-  Stock,
-  StockHistory,
-  Order,
-  Salary,
-  Charge,
-  AdCampaign,
-  AdminUser,
-  DashboardStats,
-  SalesData,
-  TopProduct,
-  ApiResponse,
-  PaginatedResponse,
-  ProductFormData,
-  StockFormData,
-  OrderFormData,
-  SalaryFormData,
-  ChargeFormData,
-  AdFormData,
-  AdminFormData,
-  ProductFilters,
-  OrderFilters,
-  ChargeFilters,
-} from "@/types";
-import { generateId, generateSKU, generateBarcode, generateOrderNumber } from "./utils";
+// Real API client - connects to Next.js API routes with Drizzle/Neon backend
 
-// Simulate API delay (300-500ms)
-const API_DELAY = () => Math.random() * 200 + 300;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
-// Base API URL placeholder - will be used in production
-// const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
+// Get token from localStorage (client-side only)
+function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('auth_token');
+}
+
+// API Error class
+export class ApiError extends Error {
+  status: number;
+  details?: unknown;
+
+  constructor(message: string, status: number, details?: unknown) {
+    super(message);
+    this.status = status;
+    this.details = details;
+    this.name = 'ApiError';
+  }
+}
+
+// Base fetch function with auth
+async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken();
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` }),
+    ...options.headers,
+  };
+
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new ApiError(
+      data.error || 'Request failed',
+      response.status,
+      data.details
+    );
+  }
+
+  return data;
+}
+
+// ============ AUTH API ============
+export const authAPI = {
+  login: async (email: string, password: string) => {
+    return fetchAPI<{ token: string; user: { id: number; email: string; name: string; role: string } }>(
+      '/api/auth/login',
+      { method: 'POST', body: JSON.stringify({ email, password }) }
+    );
+  },
+
+  getMe: async () => {
+    return fetchAPI<{ user: { id: number; email: string; name: string; role: string } }>(
+      '/api/auth/me'
+    );
+  },
+};
 
 // ============ PRODUCTS API ============
+export const productsAPI = {
+  getAll: async (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    sort?: string;
+    order?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.search) searchParams.set('search', params.search);
+    if (params?.sort) searchParams.set('sort', params.sort);
+    if (params?.order) searchParams.set('order', params.order);
 
-const products = [...mockProducts];
-
-export const productsApi = {
-  getAll: async (filters?: ProductFilters): Promise<PaginatedResponse<Product>> => {
-    await delay(API_DELAY());
-
-    let filteredProducts = [...products];
-
-    if (filters?.search) {
-      const search = filters.search.toLowerCase();
-      filteredProducts = filteredProducts.filter(
-        (p) =>
-          p.name.toLowerCase().includes(search) ||
-          p.sku.toLowerCase().includes(search) ||
-          p.barcode.includes(search)
-      );
-    }
-
-    if (filters?.category) {
-      filteredProducts = filteredProducts.filter(
-        (p) => p.category === filters.category
-      );
-    }
-
-    if (filters?.sortBy) {
-      filteredProducts.sort((a, b) => {
-        const order = filters.sortOrder === "desc" ? -1 : 1;
-        switch (filters.sortBy) {
-          case "name":
-            return a.name.localeCompare(b.name) * order;
-          case "price":
-            return (a.sellingPrice - b.sellingPrice) * order;
-          case "date":
-            return (
-              (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) *
-              order
-            );
-          default:
-            return 0;
-        }
-      });
-    }
-
-    return {
-      data: filteredProducts,
-      total: filteredProducts.length,
-      page: 1,
-      pageSize: filteredProducts.length,
-      totalPages: 1,
-    };
+    return fetchAPI<{
+      products: Array<{
+        id: number;
+        name: string;
+        sku: string;
+        barcode: string | null;
+        sellingPrice: string;
+        costPrice: string;
+        description: string | null;
+        imageUrl: string | null;
+        isActive: boolean;
+        createdAt: string;
+        updatedAt: string;
+        stockQuantity: number | null;
+        minStockLevel: number | null;
+        warehouseLocation: string | null;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/api/products?${searchParams}`);
   },
 
-  getById: async (id: string): Promise<ApiResponse<Product>> => {
-    await delay(API_DELAY());
-    const product = products.find((p) => p.id === id);
-    if (product) {
-      return { success: true, data: product };
-    }
-    return { success: false, error: "Product not found" };
+  getById: async (id: number) => {
+    return fetchAPI<{ product: unknown }>(`/api/products/${id}`);
   },
 
-  getByBarcode: async (barcode: string): Promise<ApiResponse<Product>> => {
-    await delay(API_DELAY());
-    const product = products.find((p) => p.barcode === barcode);
-    if (product) {
-      return { success: true, data: product };
-    }
-    return { success: false, error: "Product not found" };
+  create: async (data: {
+    name: string;
+    sku: string;
+    barcode?: string;
+    sellingPrice: number;
+    costPrice: number;
+    description?: string;
+    imageUrl?: string;
+  }) => {
+    return fetchAPI<{ product: unknown }>('/api/products', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
-  create: async (data: ProductFormData): Promise<ApiResponse<Product>> => {
-    await delay(API_DELAY());
-    const newProduct: Product = {
-      id: `prod-${generateId()}`,
-      ...data,
-      sku: data.sku || generateSKU(data.category),
-      barcode: data.barcode || generateBarcode(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    products.push(newProduct);
-    return { success: true, data: newProduct, message: "Product created successfully" };
+  update: async (id: number, data: Partial<{
+    name: string;
+    sku: string;
+    barcode: string;
+    sellingPrice: number;
+    costPrice: number;
+    description: string;
+    imageUrl: string;
+  }>) => {
+    return fetchAPI<{ product: unknown }>(`/api/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
 
-  update: async (id: string, data: Partial<ProductFormData>): Promise<ApiResponse<Product>> => {
-    await delay(API_DELAY());
-    const index = products.findIndex((p) => p.id === id);
-    if (index === -1) {
-      return { success: false, error: "Product not found" };
-    }
-    products[index] = {
-      ...products[index],
-      ...data,
-      updatedAt: new Date(),
-    };
-    return { success: true, data: products[index], message: "Product updated successfully" };
+  delete: async (id: number) => {
+    return fetchAPI<{ success: boolean }>(`/api/products/${id}`, {
+      method: 'DELETE',
+    });
   },
 
-  delete: async (id: string): Promise<ApiResponse<void>> => {
-    await delay(API_DELAY());
-    const index = products.findIndex((p) => p.id === id);
-    if (index === -1) {
-      return { success: false, error: "Product not found" };
+  importCSV: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const token = getToken();
+
+    const response = await fetch(`${API_BASE}/api/products/import-csv`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new ApiError(data.error || 'Import failed', response.status);
     }
-    products.splice(index, 1);
-    return { success: true, message: "Product deleted successfully" };
+    return data;
   },
 };
 
 // ============ STOCK API ============
-
-const stock = [...mockStock];
-const stockHistory = [...mockStockHistory];
-
-export const stockApi = {
-  getAll: async (): Promise<PaginatedResponse<Stock>> => {
-    await delay(API_DELAY());
-    // Update stock with current products
-    const updatedStock = stock.map((s) => ({
-      ...s,
-      product: products.find((p) => p.id === s.productId) || s.product,
-    }));
-    return {
-      data: updatedStock,
-      total: updatedStock.length,
-      page: 1,
-      pageSize: updatedStock.length,
-      totalPages: 1,
-    };
-  },
-
-  getByProductId: async (productId: string): Promise<ApiResponse<Stock>> => {
-    await delay(API_DELAY());
-    const stockItem = stock.find((s) => s.productId === productId);
-    if (stockItem) {
-      return {
-        success: true,
-        data: {
-          ...stockItem,
-          product: products.find((p) => p.id === productId) || stockItem.product,
-        },
+export const stockAPI = {
+  getAll: async (lowStockOnly?: boolean) => {
+    const params = lowStockOnly ? '?lowStock=true' : '';
+    return fetchAPI<{
+      stock: Array<{
+        id: number;
+        productId: number;
+        quantity: number;
+        minStockLevel: number;
+        warehouseLocation: string | null;
+        lastUpdated: string;
+        productName: string;
+        productSku: string;
+        productBarcode: string | null;
+        sellingPrice: string;
+        costPrice: string;
+      }>;
+      stats: {
+        totalProducts: number;
+        totalUnits: number;
+        lowStockCount: number;
+        outOfStockCount: number;
+        totalValue: number;
       };
-    }
-    return { success: false, error: "Stock not found" };
+    }>(`/api/stock${params}`);
   },
 
-  getLowStock: async (): Promise<PaginatedResponse<Stock>> => {
-    await delay(API_DELAY());
-    const lowStockItems = stock
-      .filter((s) => s.quantity <= s.lowStockThreshold)
-      .map((s) => ({
-        ...s,
-        product: products.find((p) => p.id === s.productId) || s.product,
-      }));
-    return {
-      data: lowStockItems,
-      total: lowStockItems.length,
-      page: 1,
-      pageSize: lowStockItems.length,
-      totalPages: 1,
-    };
-  },
-
-  updateQuantity: async (data: StockFormData): Promise<ApiResponse<Stock>> => {
-    await delay(API_DELAY());
-    const index = stock.findIndex((s) => s.productId === data.productId);
-    if (index === -1) {
-      return { success: false, error: "Stock not found" };
-    }
-
-    const previousQuantity = stock[index].quantity;
-    const newQuantity =
-      data.changeType === "ADD"
-        ? previousQuantity + data.quantity
-        : Math.max(0, previousQuantity - data.quantity);
-
-    stock[index] = {
-      ...stock[index],
-      quantity: newQuantity,
-      lastUpdated: new Date(),
-    };
-
-    // Add to history
-    stockHistory.unshift({
-      id: `hist-${generateId()}`,
-      productId: data.productId,
-      product: stock[index].product,
-      previousQuantity,
-      newQuantity,
-      changeType: data.changeType,
-      reason: data.reason,
-      createdAt: new Date(),
-      createdBy: "Current User",
+  add: async (data: { productId: number; quantity: number; reason?: string }) => {
+    return fetchAPI<{ stock: unknown; message: string }>('/api/stock/add', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
-
-    return {
-      success: true,
-      data: stock[index],
-      message: "Stock updated successfully",
-    };
   },
 
-  getHistory: async (productId?: string): Promise<PaginatedResponse<StockHistory>> => {
-    await delay(API_DELAY());
-    let history = stockHistory;
-    if (productId) {
-      history = history.filter((h) => h.productId === productId);
-    }
-    return {
-      data: history,
-      total: history.length,
-      page: 1,
-      pageSize: history.length,
-      totalPages: 1,
-    };
+  remove: async (data: { productId: number; quantity: number; reason?: string }) => {
+    return fetchAPI<{ stock: unknown; message: string }>('/api/stock/remove', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getHistory: async (params?: { productId?: number; page?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.productId) searchParams.set('productId', params.productId.toString());
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+
+    return fetchAPI<{
+      history: Array<{
+        id: number;
+        productId: number;
+        quantityChange: number;
+        type: string;
+        reason: string | null;
+        previousQuantity: number;
+        newQuantity: number;
+        createdAt: string;
+        productName: string;
+        productSku: string;
+        createdByName: string | null;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/api/stock/history?${searchParams}`);
   },
 };
 
+// Order type from API
+interface APIOrder {
+  id: number;
+  orderNumber: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  customerCity: string | null;
+  totalAmount: string;
+  deliveryPrice: string;
+  status: string;
+  paymentStatus: string;
+  notes: string | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string;
+  items: Array<{
+    id: number;
+    productId: number;
+    quantity: number;
+    unitPrice: string;
+    subtotal: string;
+    productName: string | null;
+    productSku: string | null;
+  }>;
+}
+
 // ============ ORDERS API ============
+export const ordersAPI = {
+  getAll: async (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+    paymentStatus?: string;
+    fromDate?: string;
+    toDate?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.search) searchParams.set('search', params.search);
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.paymentStatus) searchParams.set('paymentStatus', params.paymentStatus);
+    if (params?.fromDate) searchParams.set('fromDate', params.fromDate);
+    if (params?.toDate) searchParams.set('toDate', params.toDate);
 
-const orders = [...mockOrders];
-
-export const ordersApi = {
-  getAll: async (filters?: OrderFilters): Promise<PaginatedResponse<Order>> => {
-    await delay(API_DELAY());
-
-    let filteredOrders = [...orders];
-
-    if (filters?.search) {
-      const search = filters.search.toLowerCase();
-      filteredOrders = filteredOrders.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(search) ||
-          o.customerName.toLowerCase().includes(search) ||
-          o.customerPhone.includes(search)
-      );
-    }
-
-    if (filters?.status) {
-      filteredOrders = filteredOrders.filter((o) => o.status === filters.status);
-    }
-
-    if (filters?.dateFrom) {
-      filteredOrders = filteredOrders.filter(
-        (o) => new Date(o.createdAt) >= filters.dateFrom!
-      );
-    }
-
-    if (filters?.dateTo) {
-      filteredOrders = filteredOrders.filter(
-        (o) => new Date(o.createdAt) <= filters.dateTo!
-      );
-    }
-
-    // Sort by date descending
-    filteredOrders.sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-
-    return {
-      data: filteredOrders,
-      total: filteredOrders.length,
-      page: 1,
-      pageSize: filteredOrders.length,
-      totalPages: 1,
-    };
+    return fetchAPI<{
+      orders: Array<APIOrder>;
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/api/orders?${searchParams}`);
   },
 
-  getById: async (id: string): Promise<ApiResponse<Order>> => {
-    await delay(API_DELAY());
-    const order = orders.find((o) => o.id === id);
-    if (order) {
-      return { success: true, data: order };
-    }
-    return { success: false, error: "Order not found" };
+  getById: async (id: number) => {
+    return fetchAPI<{ order: unknown }>(`/api/orders/${id}`);
   },
 
-  getByBarcode: async (barcode: string): Promise<ApiResponse<Order>> => {
-    await delay(API_DELAY());
-    const order = orders.find((o) => o.barcode === barcode);
-    if (order) {
-      return { success: true, data: order };
-    }
-    return { success: false, error: "Order not found" };
-  },
-
-  create: async (data: OrderFormData): Promise<ApiResponse<Order>> => {
-    await delay(API_DELAY());
-
-    const orderItems = data.items.map((item) => {
-      const product = products.find((p) => p.id === item.productId);
-      if (!product) throw new Error("Product not found");
-      return {
-        id: `item-${generateId()}`,
-        productId: item.productId,
-        product,
-        quantity: item.quantity,
-        unitPrice: product.sellingPrice,
-        totalPrice: product.sellingPrice * item.quantity,
-      };
+  create: async (data: {
+    customerName: string;
+    customerPhone: string;
+    customerAddress: string;
+    customerCity?: string;
+    deliveryPrice?: number;
+    items: Array<{ productId: number; quantity: number }>;
+    notes?: string;
+  }) => {
+    return fetchAPI<{ order: unknown }>('/api/orders', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
-
-    const subtotal = orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
-
-    const newOrder: Order = {
-      id: `ord-${generateId()}`,
-      orderNumber: generateOrderNumber(),
-      barcode: generateBarcode(),
-      items: orderItems,
-      status: "PENDING",
-      deliveryPrice: data.deliveryPrice,
-      subtotal,
-      total: subtotal + data.deliveryPrice,
-      customerName: data.customerName,
-      customerPhone: data.customerPhone,
-      customerAddress: data.customerAddress,
-      notes: data.notes,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      createdBy: "Current User",
-    };
-
-    orders.unshift(newOrder);
-    return { success: true, data: newOrder, message: "Order created successfully" };
   },
 
-  updateStatus: async (
-    id: string,
-    status: Order["status"]
-  ): Promise<ApiResponse<Order>> => {
-    await delay(API_DELAY());
-    const index = orders.findIndex((o) => o.id === id);
-    if (index === -1) {
-      return { success: false, error: "Order not found" };
-    }
-    orders[index] = {
-      ...orders[index],
-      status,
-      updatedAt: new Date(),
-    };
-    return {
-      success: true,
-      data: orders[index],
-      message: "Order status updated successfully",
-    };
+  update: async (id: number, data: {
+    status?: string;
+    paymentStatus?: string;
+    notes?: string;
+  }) => {
+    return fetchAPI<{ order: unknown }>(`/api/orders/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
 
-  delete: async (id: string): Promise<ApiResponse<void>> => {
-    await delay(API_DELAY());
-    const index = orders.findIndex((o) => o.id === id);
-    if (index === -1) {
-      return { success: false, error: "Order not found" };
-    }
-    orders.splice(index, 1);
-    return { success: true, message: "Order deleted successfully" };
+  updateStatus: async (id: number, status: string) => {
+    return fetchAPI<{ order: unknown; message: string }>(`/api/orders/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    });
+  },
+
+  getStats: async () => {
+    return fetchAPI<{
+      stats: {
+        totalOrders: number;
+        pendingOrders: number;
+        deliveredOrders: number;
+        totalRevenue: number;
+        todayRevenue: number;
+        todayOrders: number;
+        ordersByStatus: Array<{ status: string; count: number }>;
+        revenueByMonth: Array<{ month: string; revenue: number; count: number }>;
+      };
+    }>('/api/orders/stats');
+  },
+};
+
+// ============ SCAN ORDERS API ============
+export const scanOrdersAPI = {
+  getAll: async (params?: { page?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+
+    return fetchAPI<{
+      scannedOrders: Array<unknown>;
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+      todayScans: number;
+    }>(`/api/scan-orders?${searchParams}`);
+  },
+
+  scan: async (data: {
+    orderId: number;
+    deliveryCompany?: string;
+    trackingNumber?: string;
+    notes?: string;
+  }) => {
+    return fetchAPI<{ scannedOrder: unknown; message: string }>('/api/scan-orders', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 };
 
 // ============ SALARIES API ============
+export const salariesAPI = {
+  getAll: async (params?: { page?: number; limit?: number; month?: number; year?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.month) searchParams.set('month', params.month.toString());
+    if (params?.year) searchParams.set('year', params.year.toString());
 
-const salaries = [...mockSalaries];
-
-export const salariesApi = {
-  getAll: async (): Promise<PaginatedResponse<Salary>> => {
-    await delay(API_DELAY());
-    return {
-      data: salaries,
-      total: salaries.length,
-      page: 1,
-      pageSize: salaries.length,
-      totalPages: 1,
-    };
+    return fetchAPI<{
+      salaries: Array<unknown>;
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+      stats: {
+        totalPaid: number;
+        totalPending: number;
+        paidCount: number;
+        pendingCount: number;
+      };
+    }>(`/api/salaries?${searchParams}`);
   },
 
-  getById: async (id: string): Promise<ApiResponse<Salary>> => {
-    await delay(API_DELAY());
-    const salary = salaries.find((s) => s.id === id);
-    if (salary) {
-      return { success: true, data: salary };
-    }
-    return { success: false, error: "Salary record not found" };
+  create: async (data: {
+    employeeName: string;
+    position?: string;
+    baseAmount: number;
+    bonus?: number;
+    deductions?: number;
+    month: number;
+    year: number;
+    notes?: string;
+  }) => {
+    return fetchAPI<{ salary: unknown }>('/api/salaries', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
-  create: async (data: SalaryFormData): Promise<ApiResponse<Salary>> => {
-    await delay(API_DELAY());
-    const newSalary: Salary = {
-      id: `sal-${generateId()}`,
-      employeeId: `emp-${generateId()}`,
-      ...data,
-      netSalary: data.baseSalary + data.bonuses - data.deductions,
-      status: "PENDING",
-      createdAt: new Date(),
-    };
-    salaries.unshift(newSalary);
-    return { success: true, data: newSalary, message: "Salary record created successfully" };
+  update: async (id: number, data: Partial<{
+    employeeName: string;
+    position: string;
+    baseAmount: number;
+    bonus: number;
+    deductions: number;
+    month: number;
+    year: number;
+    notes: string;
+    paidAt: string | null;
+  }>) => {
+    return fetchAPI<{ salary: unknown }>(`/api/salaries/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
 
-  update: async (id: string, data: Partial<SalaryFormData>): Promise<ApiResponse<Salary>> => {
-    await delay(API_DELAY());
-    const index = salaries.findIndex((s) => s.id === id);
-    if (index === -1) {
-      return { success: false, error: "Salary record not found" };
-    }
-    const updated = {
-      ...salaries[index],
-      ...data,
-    };
-    if (data.baseSalary !== undefined || data.bonuses !== undefined || data.deductions !== undefined) {
-      updated.netSalary =
-        (data.baseSalary ?? salaries[index].baseSalary) +
-        (data.bonuses ?? salaries[index].bonuses) -
-        (data.deductions ?? salaries[index].deductions);
-    }
-    salaries[index] = updated;
-    return { success: true, data: salaries[index], message: "Salary record updated successfully" };
-  },
-
-  markAsPaid: async (id: string): Promise<ApiResponse<Salary>> => {
-    await delay(API_DELAY());
-    const index = salaries.findIndex((s) => s.id === id);
-    if (index === -1) {
-      return { success: false, error: "Salary record not found" };
-    }
-    salaries[index] = {
-      ...salaries[index],
-      status: "PAID",
-      paidAt: new Date(),
-    };
-    return { success: true, data: salaries[index], message: "Salary marked as paid" };
-  },
-
-  delete: async (id: string): Promise<ApiResponse<void>> => {
-    await delay(API_DELAY());
-    const index = salaries.findIndex((s) => s.id === id);
-    if (index === -1) {
-      return { success: false, error: "Salary record not found" };
-    }
-    salaries.splice(index, 1);
-    return { success: true, message: "Salary record deleted successfully" };
+  delete: async (id: number) => {
+    return fetchAPI<{ success: boolean }>(`/api/salaries/${id}`, {
+      method: 'DELETE',
+    });
   },
 };
 
 // ============ CHARGES API ============
+export const chargesAPI = {
+  getAll: async (params?: {
+    page?: number;
+    limit?: number;
+    type?: string;
+    fromDate?: string;
+    toDate?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.type) searchParams.set('type', params.type);
+    if (params?.fromDate) searchParams.set('fromDate', params.fromDate);
+    if (params?.toDate) searchParams.set('toDate', params.toDate);
 
-const charges = [...mockCharges];
-
-export const chargesApi = {
-  getAll: async (filters?: ChargeFilters): Promise<PaginatedResponse<Charge>> => {
-    await delay(API_DELAY());
-
-    let filteredCharges = [...charges];
-
-    if (filters?.category) {
-      filteredCharges = filteredCharges.filter((c) => c.category === filters.category);
-    }
-
-    if (filters?.dateFrom) {
-      filteredCharges = filteredCharges.filter(
-        (c) => new Date(c.date) >= filters.dateFrom!
-      );
-    }
-
-    if (filters?.dateTo) {
-      filteredCharges = filteredCharges.filter(
-        (c) => new Date(c.date) <= filters.dateTo!
-      );
-    }
-
-    // Sort by date descending
-    filteredCharges.sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-
-    return {
-      data: filteredCharges,
-      total: filteredCharges.length,
-      page: 1,
-      pageSize: filteredCharges.length,
-      totalPages: 1,
-    };
+    return fetchAPI<{
+      charges: Array<unknown>;
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+      summary: {
+        byType: Array<{ type: string; total: number; count: number }>;
+        totalAmount: number;
+      };
+    }>(`/api/charges?${searchParams}`);
   },
 
-  getById: async (id: string): Promise<ApiResponse<Charge>> => {
-    await delay(API_DELAY());
-    const charge = charges.find((c) => c.id === id);
-    if (charge) {
-      return { success: true, data: charge };
-    }
-    return { success: false, error: "Charge not found" };
+  create: async (data: {
+    type: string;
+    customType?: string;
+    amount: number;
+    description?: string;
+    chargeDate: string;
+  }) => {
+    return fetchAPI<{ charge: unknown }>('/api/charges', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
-  create: async (data: ChargeFormData): Promise<ApiResponse<Charge>> => {
-    await delay(API_DELAY());
-    const newCharge: Charge = {
-      id: `chg-${generateId()}`,
-      ...data,
-      createdAt: new Date(),
-      createdBy: "Current User",
-    };
-    charges.unshift(newCharge);
-    return { success: true, data: newCharge, message: "Charge created successfully" };
+  update: async (id: number, data: Partial<{
+    type: string;
+    customType: string;
+    amount: number;
+    description: string;
+    chargeDate: string;
+  }>) => {
+    return fetchAPI<{ charge: unknown }>(`/api/charges/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
 
-  update: async (id: string, data: Partial<ChargeFormData>): Promise<ApiResponse<Charge>> => {
-    await delay(API_DELAY());
-    const index = charges.findIndex((c) => c.id === id);
-    if (index === -1) {
-      return { success: false, error: "Charge not found" };
-    }
-    charges[index] = {
-      ...charges[index],
-      ...data,
-    };
-    return { success: true, data: charges[index], message: "Charge updated successfully" };
-  },
-
-  delete: async (id: string): Promise<ApiResponse<void>> => {
-    await delay(API_DELAY());
-    const index = charges.findIndex((c) => c.id === id);
-    if (index === -1) {
-      return { success: false, error: "Charge not found" };
-    }
-    charges.splice(index, 1);
-    return { success: true, message: "Charge deleted successfully" };
-  },
-
-  getTotalByCategory: async (): Promise<ApiResponse<Record<string, number>>> => {
-    await delay(API_DELAY());
-    const totals = charges.reduce((acc, charge) => {
-      const category = charge.category === "Other" && charge.customCategory
-        ? charge.customCategory
-        : charge.category;
-      acc[category] = (acc[category] || 0) + charge.amount;
-      return acc;
-    }, {} as Record<string, number>);
-    return { success: true, data: totals };
+  delete: async (id: number) => {
+    return fetchAPI<{ success: boolean }>(`/api/charges/${id}`, {
+      method: 'DELETE',
+    });
   },
 };
 
-// ============ ADS API ============
+// ============ ADS COSTS API ============
+export const adsCostsAPI = {
+  getAll: async (params?: { page?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
 
-const adCampaigns = [...mockAdCampaigns];
-
-export const adsApi = {
-  getAll: async (): Promise<PaginatedResponse<AdCampaign>> => {
-    await delay(API_DELAY());
-    return {
-      data: adCampaigns,
-      total: adCampaigns.length,
-      page: 1,
-      pageSize: adCampaigns.length,
-      totalPages: 1,
-    };
+    return fetchAPI<{
+      adsCosts: Array<unknown>;
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+      summary: {
+        byPlatform: Array<{ platform: string; totalCost: number; totalResults: number; count: number }>;
+        totalCost: number;
+        totalResults: number;
+        avgCostPerResult: number;
+      };
+    }>(`/api/ads-costs?${searchParams}`);
   },
 
-  getById: async (id: string): Promise<ApiResponse<AdCampaign>> => {
-    await delay(API_DELAY());
-    const campaign = adCampaigns.find((a) => a.id === id);
-    if (campaign) {
-      return { success: true, data: campaign };
-    }
-    return { success: false, error: "Campaign not found" };
+  create: async (data: {
+    campaignName: string;
+    platform: string;
+    cost: number;
+    results?: number;
+    campaignDate: string;
+    notes?: string;
+  }) => {
+    return fetchAPI<{ adsCost: unknown }>('/api/ads-costs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
-  create: async (data: AdFormData): Promise<ApiResponse<AdCampaign>> => {
-    await delay(API_DELAY());
-    const newCampaign: AdCampaign = {
-      id: `ad-${generateId()}`,
-      ...data,
-      costPerResult: data.results > 0 ? data.cost / data.results : 0,
-      createdAt: new Date(),
-    };
-    adCampaigns.unshift(newCampaign);
-    return { success: true, data: newCampaign, message: "Campaign created successfully" };
+  update: async (id: number, data: Partial<{
+    campaignName: string;
+    platform: string;
+    cost: number;
+    results: number;
+    campaignDate: string;
+    notes: string;
+  }>) => {
+    return fetchAPI<{ adsCost: unknown }>(`/api/ads-costs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
 
-  update: async (id: string, data: Partial<AdFormData>): Promise<ApiResponse<AdCampaign>> => {
-    await delay(API_DELAY());
-    const index = adCampaigns.findIndex((a) => a.id === id);
-    if (index === -1) {
-      return { success: false, error: "Campaign not found" };
-    }
-    const updated = {
-      ...adCampaigns[index],
-      ...data,
-    };
-    if (data.cost !== undefined || data.results !== undefined) {
-      const cost = data.cost ?? adCampaigns[index].cost;
-      const results = data.results ?? adCampaigns[index].results;
-      updated.costPerResult = results > 0 ? cost / results : 0;
-    }
-    adCampaigns[index] = updated;
-    return { success: true, data: adCampaigns[index], message: "Campaign updated successfully" };
-  },
-
-  delete: async (id: string): Promise<ApiResponse<void>> => {
-    await delay(API_DELAY());
-    const index = adCampaigns.findIndex((a) => a.id === id);
-    if (index === -1) {
-      return { success: false, error: "Campaign not found" };
-    }
-    adCampaigns.splice(index, 1);
-    return { success: true, message: "Campaign deleted successfully" };
+  delete: async (id: number) => {
+    return fetchAPI<{ success: boolean }>(`/api/ads-costs/${id}`, {
+      method: 'DELETE',
+    });
   },
 };
 
 // ============ ADMINS API ============
+export const adminsAPI = {
+  getAll: async (params?: { page?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
 
-const adminUsers = [...mockAdminUsers];
-
-export const adminsApi = {
-  getAll: async (): Promise<PaginatedResponse<AdminUser>> => {
-    await delay(API_DELAY());
-    return {
-      data: adminUsers,
-      total: adminUsers.length,
-      page: 1,
-      pageSize: adminUsers.length,
-      totalPages: 1,
-    };
+    return fetchAPI<{
+      admins: Array<{
+        id: number;
+        email: string;
+        name: string | null;
+        role: string;
+        isActive: boolean;
+        createdAt: string;
+        updatedAt: string;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/api/admins?${searchParams}`);
   },
 
-  getById: async (id: string): Promise<ApiResponse<AdminUser>> => {
-    await delay(API_DELAY());
-    const admin = adminUsers.find((a) => a.id === id);
-    if (admin) {
-      return { success: true, data: admin };
-    }
-    return { success: false, error: "Admin not found" };
+  create: async (data: {
+    email: string;
+    password: string;
+    name: string;
+    role: string;
+  }) => {
+    return fetchAPI<{ admin: unknown }>('/api/admins', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
-  create: async (data: AdminFormData): Promise<ApiResponse<AdminUser>> => {
-    await delay(API_DELAY());
-    const newAdmin: AdminUser = {
-      id: `admin-${generateId()}`,
-      name: data.name,
-      email: data.email,
-      role: "ADMIN",
-      status: "ACTIVE",
-      createdAt: new Date(),
-    };
-    adminUsers.unshift(newAdmin);
-    return { success: true, data: newAdmin, message: "Admin created successfully" };
+  update: async (id: number, data: Partial<{
+    email: string;
+    password: string;
+    name: string;
+    role: string;
+    isActive: boolean;
+  }>) => {
+    return fetchAPI<{ admin: unknown }>(`/api/admins/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
 
-  update: async (id: string, data: Partial<AdminFormData>): Promise<ApiResponse<AdminUser>> => {
-    await delay(API_DELAY());
-    const index = adminUsers.findIndex((a) => a.id === id);
-    if (index === -1) {
-      return { success: false, error: "Admin not found" };
-    }
-    adminUsers[index] = {
-      ...adminUsers[index],
-      ...(data.name && { name: data.name }),
-      ...(data.email && { email: data.email }),
-    };
-    return { success: true, data: adminUsers[index], message: "Admin updated successfully" };
-  },
-
-  toggleStatus: async (id: string): Promise<ApiResponse<AdminUser>> => {
-    await delay(API_DELAY());
-    const index = adminUsers.findIndex((a) => a.id === id);
-    if (index === -1) {
-      return { success: false, error: "Admin not found" };
-    }
-    adminUsers[index] = {
-      ...adminUsers[index],
-      status: adminUsers[index].status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
-    };
-    return { success: true, data: adminUsers[index], message: "Admin status updated" };
-  },
-
-  delete: async (id: string): Promise<ApiResponse<void>> => {
-    await delay(API_DELAY());
-    const index = adminUsers.findIndex((a) => a.id === id);
-    if (index === -1) {
-      return { success: false, error: "Admin not found" };
-    }
-    adminUsers.splice(index, 1);
-    return { success: true, message: "Admin deleted successfully" };
+  delete: async (id: number) => {
+    return fetchAPI<{ success: boolean }>(`/api/admins/${id}`, {
+      method: 'DELETE',
+    });
   },
 };
 
 // ============ DASHBOARD API ============
+export const dashboardAPI = {
+  getStats: async () => {
+    return fetchAPI<{
+      stats: {
+        totalProducts: number;
+        totalStockValue: number;
+        totalStockUnits: number;
+        lowStockCount: number;
+        outOfStockCount: number;
+        totalOrders: number;
+        pendingOrders: number;
+        totalRevenue: number;
+        todayRevenue: number;
+        todayOrders: number;
+      };
+      charts: {
+        ordersByStatus: Array<{ status: string; count: number }>;
+        revenueByMonth: Array<{ month: string; revenue: number; count: number }>;
+        topProducts: Array<{
+          productId: number;
+          productName: string;
+          productSku: string;
+          totalQuantity: number;
+          totalRevenue: number;
+        }>;
+      };
+      recentOrders: Array<{
+        id: number;
+        orderNumber: string;
+        customerName: string;
+        totalAmount: string;
+        status: string;
+        paymentStatus: string;
+        createdAt: string;
+      }>;
+      lowStockProducts: Array<{
+        id: number;
+        name: string;
+        sku: string;
+        quantity: number;
+        minStockLevel: number;
+      }>;
+    }>('/api/dashboard/stats');
+  },
+};
+
+// Legacy exports for backward compatibility (mapped to new API structure)
+export const productsApi = {
+  getAll: async (filters?: { search?: string; category?: string; sortBy?: string; sortOrder?: string }) => {
+    const result = await productsAPI.getAll({
+      search: filters?.search,
+      sort: filters?.sortBy,
+      order: filters?.sortOrder,
+    });
+    // Transform API response to frontend Product type
+    const transformedProducts = result.products.map(p => ({
+      id: String(p.id),
+      name: p.name,
+      sku: p.sku,
+      barcode: p.barcode || '',
+      category: 'Other' as const,
+      sellingPrice: parseFloat(p.sellingPrice),
+      costPrice: parseFloat(p.costPrice),
+      imageUrl: p.imageUrl || undefined,
+      description: p.description || undefined,
+      createdAt: new Date(p.createdAt),
+      updatedAt: new Date(p.updatedAt),
+    }));
+    return {
+      data: transformedProducts,
+      total: result.total,
+      page: result.page,
+      pageSize: result.limit,
+      totalPages: result.totalPages,
+    };
+  },
+  getById: async (id: string) => {
+    try {
+      const result = await productsAPI.getById(parseInt(id));
+      return { success: true, data: result.product };
+    } catch {
+      return { success: false, error: 'Product not found' };
+    }
+  },
+  getByBarcode: async (barcode: string) => {
+    try {
+      // Search for product by barcode
+      const result = await productsAPI.getAll({ search: barcode });
+      const product = result.products.find(p => p.barcode === barcode || p.sku === barcode);
+      if (product) {
+        return {
+          success: true,
+          data: {
+            id: String(product.id),
+            name: product.name,
+            sku: product.sku,
+            barcode: product.barcode || '',
+            category: 'Other' as const,
+            sellingPrice: parseFloat(product.sellingPrice),
+            costPrice: parseFloat(product.costPrice),
+            imageUrl: product.imageUrl || undefined,
+            description: product.description || undefined,
+            createdAt: new Date(product.createdAt),
+            updatedAt: new Date(product.updatedAt),
+          },
+        };
+      }
+      return { success: false, error: 'Product not found' };
+    } catch {
+      return { success: false, error: 'Product not found' };
+    }
+  },
+  create: async (data: { name: string; sku?: string; barcode?: string; sellingPrice: number; costPrice: number; category: string; description?: string; imageUrl?: string }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      // Generate SKU if not provided
+      const sku = data.sku || `SKU-${Date.now()}`;
+      const result = await productsAPI.create({ ...data, sku });
+      return { success: true, data: result.product, message: 'Product created successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create product';
+      return { success: false, error: message };
+    }
+  },
+  update: async (id: string, data: Partial<{ name: string; sku: string; barcode: string; sellingPrice: number; costPrice: number; description: string; imageUrl: string }>): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      const result = await productsAPI.update(parseInt(id), data);
+      return { success: true, data: result.product, message: 'Product updated successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update product';
+      return { success: false, error: message };
+    }
+  },
+  delete: async (id: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      await productsAPI.delete(parseInt(id));
+      return { success: true, message: 'Product deleted successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete product';
+      return { success: false, error: message };
+    }
+  },
+};
+
+export const stockApi = {
+  getAll: async () => {
+    const result = await stockAPI.getAll();
+    // Transform flat API response to nested structure expected by frontend
+    const transformedStock = result.stock.map(s => ({
+      id: String(s.id),
+      productId: String(s.productId),
+      product: {
+        id: String(s.productId),
+        name: s.productName,
+        sku: s.productSku,
+        barcode: s.productBarcode || '',
+        category: 'Other' as const,
+        sellingPrice: parseFloat(s.sellingPrice),
+        costPrice: parseFloat(s.costPrice),
+        imageUrl: undefined,
+        description: undefined,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      quantity: s.quantity,
+      lowStockThreshold: s.minStockLevel,
+      lastUpdated: new Date(s.lastUpdated),
+    }));
+    return {
+      data: transformedStock,
+      total: transformedStock.length,
+      page: 1,
+      pageSize: transformedStock.length,
+      totalPages: 1,
+    };
+  },
+  getLowStock: async () => {
+    const result = await stockAPI.getAll(true);
+    // Transform flat API response to nested structure expected by frontend
+    const transformedStock = result.stock.map(s => ({
+      id: String(s.id),
+      productId: String(s.productId),
+      product: {
+        id: String(s.productId),
+        name: s.productName,
+        sku: s.productSku,
+        barcode: s.productBarcode || '',
+        category: 'Other' as const,
+        sellingPrice: parseFloat(s.sellingPrice),
+        costPrice: parseFloat(s.costPrice),
+        imageUrl: undefined,
+        description: undefined,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      quantity: s.quantity,
+      lowStockThreshold: s.minStockLevel,
+      lastUpdated: new Date(s.lastUpdated),
+    }));
+    return {
+      data: transformedStock,
+      total: transformedStock.length,
+      page: 1,
+      pageSize: transformedStock.length,
+      totalPages: 1,
+    };
+  },
+  updateQuantity: async (data: { productId: string; quantity: number; changeType: 'ADD' | 'REMOVE'; reason?: string }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      const apiCall = data.changeType === 'ADD' ? stockAPI.add : stockAPI.remove;
+      const result = await apiCall({
+        productId: parseInt(data.productId),
+        quantity: data.quantity,
+        reason: data.reason,
+      });
+      return { success: true, data: result.stock, message: result.message };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update stock';
+      return { success: false, error: message };
+    }
+  },
+  getHistory: async (productId?: string) => {
+    const result = await stockAPI.getHistory({ productId: productId ? parseInt(productId) : undefined });
+    return {
+      data: result.history,
+      total: result.total,
+      page: result.page,
+      pageSize: result.limit,
+      totalPages: result.totalPages,
+    };
+  },
+};
+
+export const ordersApi = {
+  getAll: async (filters?: { search?: string; status?: string; dateFrom?: Date; dateTo?: Date }) => {
+    const result = await ordersAPI.getAll({
+      search: filters?.search,
+      status: filters?.status,
+      fromDate: filters?.dateFrom?.toISOString(),
+      toDate: filters?.dateTo?.toISOString(),
+    });
+    // Transform API response to frontend Order type
+    const transformedOrders = result.orders.map(order => ({
+      id: String(order.id),
+      orderNumber: order.orderNumber,
+      barcode: order.orderNumber, // Use order number as barcode
+      status: order.status as 'PENDING' | 'CONFIRMED' | 'IN_TRANSIT' | 'DELIVERED' | 'RETURNED' | 'CANCELLED',
+      deliveryPrice: parseFloat(order.deliveryPrice),
+      subtotal: parseFloat(order.totalAmount) - parseFloat(order.deliveryPrice),
+      total: parseFloat(order.totalAmount),
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      customerAddress: order.customerAddress,
+      notes: order.notes || undefined,
+      createdAt: new Date(order.createdAt),
+      updatedAt: new Date(order.updatedAt),
+      createdBy: String(order.createdBy || ''),
+      items: order.items.map(item => ({
+        id: String(item.id),
+        productId: String(item.productId),
+        product: {
+          id: String(item.productId),
+          name: item.productName || 'Unknown Product',
+          sku: item.productSku || '',
+          barcode: '',
+          category: 'Other' as const,
+          sellingPrice: parseFloat(item.unitPrice),
+          costPrice: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        quantity: item.quantity,
+        unitPrice: parseFloat(item.unitPrice),
+        totalPrice: parseFloat(item.subtotal),
+      })),
+    }));
+    return {
+      data: transformedOrders,
+      total: result.total,
+      page: result.page,
+      pageSize: result.limit,
+      totalPages: result.totalPages,
+    };
+  },
+  getById: async (id: string) => {
+    try {
+      const result = await ordersAPI.getById(parseInt(id));
+      return { success: true, data: result.order };
+    } catch {
+      return { success: false, error: 'Order not found' };
+    }
+  },
+  getByBarcode: async (barcode: string) => {
+    try {
+      // Search for order by order number (which is used as barcode)
+      const result = await ordersAPI.getAll({ search: barcode });
+      const order = result.orders.find(o => o.orderNumber === barcode);
+      if (order) {
+        return {
+          success: true,
+          data: {
+            id: String(order.id),
+            orderNumber: order.orderNumber,
+            barcode: order.orderNumber,
+            status: order.status as 'PENDING' | 'CONFIRMED' | 'IN_TRANSIT' | 'DELIVERED' | 'RETURNED' | 'CANCELLED',
+            deliveryPrice: parseFloat(order.deliveryPrice),
+            subtotal: parseFloat(order.totalAmount) - parseFloat(order.deliveryPrice),
+            total: parseFloat(order.totalAmount),
+            customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            customerAddress: order.customerAddress,
+            notes: order.notes || undefined,
+            createdAt: new Date(order.createdAt),
+            updatedAt: new Date(order.updatedAt),
+            createdBy: String(order.createdBy || ''),
+            items: order.items.map(item => ({
+              id: String(item.id),
+              productId: String(item.productId),
+              product: {
+                id: String(item.productId),
+                name: item.productName || 'Unknown Product',
+                sku: item.productSku || '',
+                barcode: '',
+                category: 'Other' as const,
+                sellingPrice: parseFloat(item.unitPrice),
+                costPrice: 0,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              quantity: item.quantity,
+              unitPrice: parseFloat(item.unitPrice),
+              totalPrice: parseFloat(item.subtotal),
+            })),
+          },
+        };
+      }
+      return { success: false, error: 'Order not found' };
+    } catch {
+      return { success: false, error: 'Order not found' };
+    }
+  },
+  create: async (data: { customerName: string; customerPhone: string; customerAddress: string; deliveryPrice: number; items: Array<{ productId: string; quantity: number }>; notes?: string }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      const result = await ordersAPI.create({
+        ...data,
+        items: data.items.map(item => ({ productId: parseInt(item.productId), quantity: item.quantity })),
+      });
+      return { success: true, data: result.order, message: 'Order created successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create order';
+      return { success: false, error: message };
+    }
+  },
+  updateStatus: async (id: string, status: string): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      const result = await ordersAPI.updateStatus(parseInt(id), status);
+      return { success: true, data: result.order, message: result.message };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update order status';
+      return { success: false, error: message };
+    }
+  },
+};
+
+export const salariesApi = {
+  getAll: async () => {
+    const result = await salariesAPI.getAll();
+    // Transform API response to frontend Salary type
+    const transformedSalaries = (result.salaries as Array<{
+      id: number;
+      employeeName: string;
+      position: string | null;
+      baseAmount: string;
+      bonus: string;
+      deductions: string;
+      totalAmount: string;
+      month: number;
+      year: number;
+      notes: string | null;
+      paidAt: string | null;
+      createdAt: string;
+    }>).map(salary => ({
+      id: String(salary.id),
+      employeeId: String(salary.id),
+      employeeName: salary.employeeName,
+      employeeRole: salary.position || '',
+      baseSalary: parseFloat(salary.baseAmount),
+      bonuses: parseFloat(salary.bonus),
+      deductions: parseFloat(salary.deductions),
+      netSalary: parseFloat(salary.totalAmount),
+      month: new Date(salary.year, salary.month - 1).toLocaleString('default', { month: 'long' }),
+      year: salary.year,
+      status: salary.paidAt ? 'PAID' as const : 'PENDING' as const,
+      paidAt: salary.paidAt ? new Date(salary.paidAt) : undefined,
+      createdAt: new Date(salary.createdAt),
+    }));
+    return {
+      data: transformedSalaries,
+      total: result.total,
+      page: result.page,
+      pageSize: result.limit,
+      totalPages: result.totalPages,
+    };
+  },
+  create: async (data: { employeeName: string; employeeRole: string; baseSalary: number; bonuses: number; deductions: number; month: number | string; year: number; notes?: string }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      // Convert month name to number if string
+      const monthNum = typeof data.month === 'string'
+        ? new Date(Date.parse(data.month + ' 1, 2000')).getMonth() + 1
+        : data.month;
+      const result = await salariesAPI.create({
+        employeeName: data.employeeName,
+        position: data.employeeRole,
+        baseAmount: data.baseSalary,
+        bonus: data.bonuses,
+        deductions: data.deductions,
+        month: monthNum,
+        year: data.year,
+        notes: data.notes,
+      });
+      return { success: true, data: result.salary, message: 'Salary record created successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create salary record';
+      return { success: false, error: message };
+    }
+  },
+  update: async (id: string, data: Partial<{ employeeName: string; employeeRole: string; baseSalary: number; bonuses: number; deductions: number; month: number | string; year: number; notes: string }>): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      // Convert month name to number if string
+      const monthNum = typeof data.month === 'string'
+        ? new Date(Date.parse(data.month + ' 1, 2000')).getMonth() + 1
+        : data.month;
+      const result = await salariesAPI.update(parseInt(id), {
+        employeeName: data.employeeName,
+        position: data.employeeRole,
+        baseAmount: data.baseSalary,
+        bonus: data.bonuses,
+        deductions: data.deductions,
+        month: monthNum,
+        year: data.year,
+        notes: data.notes,
+      });
+      return { success: true, data: result.salary, message: 'Salary record updated successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update salary record';
+      return { success: false, error: message };
+    }
+  },
+  markAsPaid: async (id: string): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      const result = await salariesAPI.update(parseInt(id), { paidAt: new Date().toISOString() });
+      return { success: true, data: result.salary, message: 'Salary marked as paid' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to mark salary as paid';
+      return { success: false, error: message };
+    }
+  },
+  delete: async (id: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      await salariesAPI.delete(parseInt(id));
+      return { success: true, message: 'Salary record deleted successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete salary record';
+      return { success: false, error: message };
+    }
+  },
+};
+
+export const chargesApi = {
+  getAll: async (filters?: { category?: string; dateFrom?: Date; dateTo?: Date }) => {
+    const result = await chargesAPI.getAll({
+      type: filters?.category,
+      fromDate: filters?.dateFrom?.toISOString().split('T')[0],
+      toDate: filters?.dateTo?.toISOString().split('T')[0],
+    });
+    // Transform API response to frontend Charge type
+    const transformedCharges = (result.charges as Array<{
+      id: number;
+      type: string;
+      customType: string | null;
+      amount: string;
+      description: string | null;
+      chargeDate: string;
+      createdBy: number | null;
+      createdAt: string;
+    }>).map(charge => ({
+      id: String(charge.id),
+      category: charge.type as 'Lawyer' | 'Water Bill' | 'Electricity' | 'Broken Parts' | 'Other',
+      customCategory: charge.customType || undefined,
+      amount: parseFloat(charge.amount),
+      description: charge.description || '',
+      date: new Date(charge.chargeDate),
+      createdAt: new Date(charge.createdAt),
+      createdBy: String(charge.createdBy || ''),
+    }));
+    return {
+      data: transformedCharges,
+      total: result.total,
+      page: result.page,
+      pageSize: result.limit,
+      totalPages: result.totalPages,
+    };
+  },
+  create: async (data: { category: string; customCategory?: string; amount: number; description: string; date: Date }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      const result = await chargesAPI.create({
+        type: data.category,
+        customType: data.customCategory,
+        amount: data.amount,
+        description: data.description,
+        chargeDate: data.date.toISOString().split('T')[0],
+      });
+      return { success: true, data: result.charge, message: 'Charge created successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create charge';
+      return { success: false, error: message };
+    }
+  },
+  update: async (id: string, data: Partial<{ category: string; customCategory: string; amount: number; description: string; date: Date }>): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      const result = await chargesAPI.update(parseInt(id), {
+        type: data.category,
+        customType: data.customCategory,
+        amount: data.amount,
+        description: data.description,
+        chargeDate: data.date?.toISOString().split('T')[0],
+      });
+      return { success: true, data: result.charge, message: 'Charge updated successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update charge';
+      return { success: false, error: message };
+    }
+  },
+  delete: async (id: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      await chargesAPI.delete(parseInt(id));
+      return { success: true, message: 'Charge deleted successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete charge';
+      return { success: false, error: message };
+    }
+  },
+  getTotalByCategory: async () => {
+    const result = await chargesAPI.getAll();
+    const totals: Record<string, number> = {};
+    result.summary.byType.forEach(item => {
+      totals[item.type] = item.total;
+    });
+    return { success: true, data: totals };
+  },
+};
+
+export const adsApi = {
+  getAll: async () => {
+    const result = await adsCostsAPI.getAll();
+    // Transform API response to frontend AdCampaign type
+    const transformedAds = (result.adsCosts as Array<{
+      id: number;
+      campaignName: string;
+      platform: string;
+      cost: string;
+      results: number | null;
+      costPerResult: string | null;
+      campaignDate: string;
+      notes: string | null;
+      createdAt: string;
+    }>).map(ad => ({
+      id: String(ad.id),
+      name: ad.campaignName,
+      platform: ad.platform as 'Facebook' | 'Instagram' | 'Google' | 'TikTok' | 'YouTube' | 'Other',
+      cost: parseFloat(ad.cost),
+      results: ad.results || 0,
+      costPerResult: ad.costPerResult ? parseFloat(ad.costPerResult) : 0,
+      startDate: new Date(ad.campaignDate),
+      endDate: new Date(ad.campaignDate),
+      status: 'ACTIVE' as const,
+      createdAt: new Date(ad.createdAt),
+    }));
+    return {
+      data: transformedAds,
+      total: result.total,
+      page: result.page,
+      pageSize: result.limit,
+      totalPages: result.totalPages,
+    };
+  },
+  create: async (data: { name: string; platform: string; cost: number; results: number; startDate: Date; endDate: Date; status: string }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      const result = await adsCostsAPI.create({
+        campaignName: data.name,
+        platform: data.platform,
+        cost: data.cost,
+        results: data.results,
+        campaignDate: data.startDate.toISOString().split('T')[0],
+      });
+      return { success: true, data: result.adsCost, message: 'Campaign created successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create campaign';
+      return { success: false, error: message };
+    }
+  },
+  update: async (id: string, data: Partial<{ name: string; platform: string; cost: number; results: number; startDate: Date; endDate: Date; status: string }>): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      const result = await adsCostsAPI.update(parseInt(id), {
+        campaignName: data.name,
+        platform: data.platform,
+        cost: data.cost,
+        results: data.results,
+        campaignDate: data.startDate?.toISOString().split('T')[0],
+      });
+      return { success: true, data: result.adsCost, message: 'Campaign updated successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update campaign';
+      return { success: false, error: message };
+    }
+  },
+  delete: async (id: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      await adsCostsAPI.delete(parseInt(id));
+      return { success: true, message: 'Campaign deleted successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete campaign';
+      return { success: false, error: message };
+    }
+  },
+};
+
+export const adminsApi = {
+  getAll: async () => {
+    const result = await adminsAPI.getAll();
+    // Transform API response to frontend AdminUser type
+    const transformedAdmins = result.admins.map(admin => ({
+      id: String(admin.id),
+      name: admin.name || '',
+      email: admin.email,
+      role: admin.role as 'ADMIN',
+      status: admin.isActive ? 'ACTIVE' as const : 'INACTIVE' as const,
+      createdAt: new Date(admin.createdAt),
+      lastLogin: undefined,
+    }));
+    return {
+      data: transformedAdmins,
+      total: result.total,
+      page: result.page,
+      pageSize: result.limit,
+      totalPages: result.totalPages,
+    };
+  },
+  create: async (data: { name: string; email: string; password: string }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      const result = await adminsAPI.create({
+        ...data,
+        role: 'ADMIN',
+      });
+      return { success: true, data: result.admin, message: 'Admin created successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create admin';
+      return { success: false, error: message };
+    }
+  },
+  update: async (id: string, data: Partial<{ name: string; email: string; password: string }>): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      const result = await adminsAPI.update(parseInt(id), data);
+      return { success: true, data: result.admin, message: 'Admin updated successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update admin';
+      return { success: false, error: message };
+    }
+  },
+  toggleStatus: async (id: string): Promise<{ success: boolean; data?: { status: string }; message?: string; error?: string }> => {
+    try {
+      const admins = await adminsAPI.getAll();
+      const admin = admins.admins.find(a => a.id === parseInt(id));
+      if (!admin) return { success: false, error: 'Admin not found' };
+      const newIsActive = !admin.isActive;
+      await adminsAPI.update(parseInt(id), { isActive: newIsActive });
+      return { success: true, data: { status: newIsActive ? 'ACTIVE' : 'INACTIVE' }, message: 'Admin status updated' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to toggle admin status';
+      return { success: false, error: message };
+    }
+  },
+  delete: async (id: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      await adminsAPI.delete(parseInt(id));
+      return { success: true, message: 'Admin deleted successfully' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete admin';
+      return { success: false, error: message };
+    }
+  },
+};
 
 export const dashboardApi = {
-  getStats: async (): Promise<ApiResponse<DashboardStats>> => {
-    await delay(API_DELAY());
-    // Calculate actual stats from mock data
-    const totalOrders = orders.filter((o) => o.status !== "CANCELLED").length;
-    const totalRevenue = orders
-      .filter((o) => o.status === "DELIVERED")
-      .reduce((sum, o) => sum + o.total, 0);
-    const lowStockItems = stock.filter((s) => s.quantity <= s.lowStockThreshold).length;
-
+  getStats: async () => {
+    const result = await dashboardAPI.getStats();
     return {
       success: true,
       data: {
-        totalRevenue,
-        totalOrders,
-        productsCount: products.length,
-        lowStockItems,
-        revenueChange: 12.5,
-        ordersChange: 8.3,
+        totalRevenue: result.stats.totalRevenue,
+        totalOrders: result.stats.totalOrders,
+        productsCount: result.stats.totalProducts,
+        lowStockItems: result.stats.lowStockCount,
+        revenueChange: 0,
+        ordersChange: 0,
       },
     };
   },
-
-  getSalesData: async (): Promise<ApiResponse<SalesData[]>> => {
-    await delay(API_DELAY());
-    return { success: true, data: mockSalesData };
+  getSalesData: async () => {
+    const result = await dashboardAPI.getStats();
+    return {
+      success: true,
+      data: result.charts.revenueByMonth.map(item => ({
+        date: item.month,
+        sales: item.revenue,
+        orders: item.count,
+      })),
+    };
   },
-
-  getTopProducts: async (): Promise<ApiResponse<TopProduct[]>> => {
-    await delay(API_DELAY());
-    return { success: true, data: mockTopProducts };
+  getTopProducts: async () => {
+    const result = await dashboardAPI.getStats();
+    return {
+      success: true,
+      data: result.charts.topProducts.map(item => ({
+        productId: String(item.productId),
+        productName: item.productName,
+        totalSold: item.totalQuantity,
+        revenue: item.totalRevenue,
+      })),
+    };
   },
-
-  getRecentOrders: async (limit: number = 10): Promise<ApiResponse<Order[]>> => {
-    await delay(API_DELAY());
-    const recentOrders = [...orders]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, limit);
-    return { success: true, data: recentOrders };
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  getRecentOrders: async (limit?: number) => {
+    const result = await dashboardAPI.getStats();
+    // Transform to Order type format
+    const transformedOrders = result.recentOrders.map(order => ({
+      id: String(order.id),
+      orderNumber: order.orderNumber,
+      barcode: order.orderNumber,
+      status: order.status as 'PENDING' | 'CONFIRMED' | 'IN_TRANSIT' | 'DELIVERED' | 'RETURNED' | 'CANCELLED',
+      deliveryPrice: 0,
+      subtotal: parseFloat(order.totalAmount),
+      total: parseFloat(order.totalAmount),
+      customerName: order.customerName,
+      customerPhone: '',
+      customerAddress: '',
+      createdAt: new Date(order.createdAt),
+      updatedAt: new Date(order.createdAt),
+      createdBy: '',
+      items: [],
+    }));
+    return { success: true, data: transformedOrders };
   },
 };
