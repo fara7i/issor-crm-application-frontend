@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { AdminUser } from "@/types";
+import { AdminUser, UserRole } from "@/types";
 import { adminsApi } from "@/lib/api-client";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
@@ -43,6 +43,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Users,
@@ -53,8 +60,29 @@ import {
   Loader2,
   Power,
   Shield,
+  ShoppingCart,
+  Warehouse,
+  CheckCircle,
+  Crown,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+
+// Available roles for user creation
+const userRoles: { value: UserRole; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { value: "ADMIN", label: "Admin", icon: Shield },
+  { value: "SHOP_AGENT", label: "Shop Agent", icon: ShoppingCart },
+  { value: "WAREHOUSE_AGENT", label: "Warehouse Agent", icon: Warehouse },
+  { value: "CONFIRMER", label: "Confirmer", icon: CheckCircle },
+];
+
+// Role display configuration
+const roleConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
+  SUPER_ADMIN: { label: "Super Admin", icon: Crown, color: "bg-purple-500" },
+  ADMIN: { label: "Admin", icon: Shield, color: "bg-blue-500" },
+  SHOP_AGENT: { label: "Shop Agent", icon: ShoppingCart, color: "bg-green-500" },
+  WAREHOUSE_AGENT: { label: "Warehouse Agent", icon: Warehouse, color: "bg-orange-500" },
+  CONFIRMER: { label: "Confirmer", icon: CheckCircle, color: "bg-cyan-500" },
+};
 
 export default function AdminsPage() {
   const [admins, setAdmins] = useState<AdminUser[]>([]);
@@ -68,6 +96,7 @@ export default function AdminsPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<UserRole>("ADMIN");
 
   const loadAdmins = useCallback(async () => {
     setIsLoading(true);
@@ -75,7 +104,7 @@ export default function AdminsPage() {
       const response = await adminsApi.getAll();
       setAdmins(response.data);
     } catch {
-      toast.error("Failed to load admins");
+      toast.error("Failed to load users");
     } finally {
       setIsLoading(false);
     }
@@ -89,6 +118,7 @@ export default function AdminsPage() {
     setName("");
     setEmail("");
     setPassword("");
+    setRole("ADMIN");
     setSelectedAdmin(null);
   };
 
@@ -102,6 +132,7 @@ export default function AdminsPage() {
     setName(admin.name);
     setEmail(admin.email);
     setPassword("");
+    setRole(admin.role);
     setFormOpen(true);
   };
 
@@ -115,25 +146,30 @@ export default function AdminsPage() {
     setIsSubmitting(true);
 
     try {
-      const data = {
+      const data: { name: string; email: string; password?: string; role?: string } = {
         name,
         email,
-        password,
+        role,
       };
+
+      // Only include password if provided
+      if (password) {
+        data.password = password;
+      }
 
       const response = selectedAdmin
         ? await adminsApi.update(selectedAdmin.id, data)
-        : await adminsApi.create(data);
+        : await adminsApi.create({ ...data, password: password || '' });
 
       if (response.success) {
         toast.success(
-          selectedAdmin ? "Admin updated successfully" : "Admin created successfully"
+          selectedAdmin ? "User updated successfully" : "User created successfully"
         );
         setFormOpen(false);
         resetForm();
         loadAdmins();
       } else {
-        toast.error(response.error || "Failed to save admin");
+        toast.error(response.error || "Failed to save user");
       }
     } catch {
       toast.error("An error occurred");
@@ -147,7 +183,7 @@ export default function AdminsPage() {
       const response = await adminsApi.toggleStatus(admin.id);
       if (response.success) {
         toast.success(
-          `Admin ${response.data?.status === "ACTIVE" ? "activated" : "deactivated"}`
+          `User ${response.data?.status === "ACTIVE" ? "activated" : "deactivated"}`
         );
         loadAdmins();
       }
@@ -162,12 +198,12 @@ export default function AdminsPage() {
     try {
       const response = await adminsApi.delete(selectedAdmin.id);
       if (response.success) {
-        toast.success("Admin deleted");
+        toast.success("User deleted");
         setDeleteOpen(false);
         loadAdmins();
       }
     } catch {
-      toast.error("Failed to delete admin");
+      toast.error("Failed to delete user");
     } finally {
       setIsSubmitting(false);
     }
@@ -182,13 +218,13 @@ export default function AdminsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Users className="h-6 w-6" />
-            Admins
+            User Management
           </h1>
-          <p className="text-muted-foreground">Manage admin user accounts</p>
+          <p className="text-muted-foreground">Manage all user accounts</p>
         </div>
         <Button onClick={handleCreate}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Admin
+          Add User
         </Button>
       </div>
 
@@ -198,8 +234,9 @@ export default function AdminsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Admin</TableHead>
+                <TableHead>User</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Last Login</TableHead>
@@ -210,7 +247,7 @@ export default function AdminsPage() {
               {isLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 6 }).map((_, j) => (
+                    {Array.from({ length: 7 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -219,10 +256,10 @@ export default function AdminsPage() {
                 ))
               ) : admins.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-48 text-center">
+                  <TableCell colSpan={7} className="h-48 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Users className="h-10 w-10 text-muted-foreground" />
-                      <p className="text-muted-foreground">No admins found</p>
+                      <p className="text-muted-foreground">No users found</p>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -241,14 +278,18 @@ export default function AdminsPage() {
                         </Avatar>
                         <div>
                           <p className="font-medium">{admin.name}</p>
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Shield className="h-3 w-3" />
-                            Admin
-                          </div>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>{admin.email}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={`${roleConfig[admin.role]?.color || 'bg-gray-500'} text-white border-0`}
+                      >
+                        {roleConfig[admin.role]?.label || admin.role}
+                      </Badge>
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={
@@ -312,12 +353,12 @@ export default function AdminsPage() {
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle>
-              {selectedAdmin ? "Edit Admin" : "Add Admin"}
+              {selectedAdmin ? "Edit User" : "Add User"}
             </DialogTitle>
             <DialogDescription>
               {selectedAdmin
-                ? "Update admin information"
-                : "Create a new admin account"}
+                ? "Update user information"
+                : "Create a new user account"}
             </DialogDescription>
           </DialogHeader>
 
@@ -344,13 +385,39 @@ export default function AdminsPage() {
             </div>
 
             <div className="space-y-2">
+              <Label>Role</Label>
+              <Select
+                value={role}
+                onValueChange={(v) => setRole(v as UserRole)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {userRoles.map((r) => {
+                    const Icon = r.icon;
+                    return (
+                      <SelectItem key={r.value} value={r.value}>
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-4 w-4" />
+                          {r.label}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label>Password {selectedAdmin && "(leave empty to keep)"}</Label>
               <Input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
+                placeholder="Enter password (min 6 characters)"
                 required={!selectedAdmin}
+                minLength={6}
               />
             </div>
 
@@ -377,7 +444,7 @@ export default function AdminsPage() {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Admin</AlertDialogTitle>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete {selectedAdmin?.name}? This action
               cannot be undone.
