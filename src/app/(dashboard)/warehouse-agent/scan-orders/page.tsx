@@ -1,14 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Order } from "@/types";
-import { ordersApi } from "@/lib/api-client";
+import { ordersApi, scanOrdersApi } from "@/lib/api-client";
 import { formatDH, getOrderStatusColor } from "@/lib/utils";
 import { BarcodeScanner } from "@/components/orders/barcode-scanner";
+import { CameraScanner } from "@/components/orders/camera-scanner";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -17,6 +21,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   ScanLine,
@@ -25,6 +37,9 @@ import {
   Clock,
   Truck,
   ClipboardList,
+  Camera,
+  Keyboard,
+  Loader2,
 } from "lucide-react";
 
 interface ScannedOrder {
@@ -37,8 +52,35 @@ export default function ScanOrdersPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [scannedOrders, setScannedOrders] = useState<ScannedOrder[]>([]);
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
+  const [scanMode, setScanMode] = useState<"keyboard" | "camera">("keyboard");
+
+  // Import dialog state
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [deliveryCompany, setDeliveryCompany] = useState("");
+  const [trackingNumber, setTrackingNumber] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Audio ref for notification sound
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize audio on mount
+  useEffect(() => {
+    audioRef.current = new Audio("/sounds/notification.mp3");
+  }, []);
+
+  const playNotificationSound = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch((error) => {
+        console.warn("Could not play notification sound:", error);
+      });
+    }
+  }, []);
 
   const handleBarcodeScan = async (barcode: string) => {
+    // Prevent scanning while processing
+    if (isLoading) return;
+
     setIsLoading(true);
     try {
       const response = await ordersApi.getByBarcode(barcode);
@@ -52,6 +94,8 @@ export default function ScanOrdersPage() {
         if (alreadyScanned) {
           toast.info("This order has already been scanned");
         } else {
+          // Play notification sound when order is found
+          playNotificationSound();
           toast.success(`Order ${order.orderNumber} found`);
         }
       } else {
@@ -65,7 +109,7 @@ export default function ScanOrdersPage() {
     }
   };
 
-  const handleImportOrder = () => {
+  const handleImportOrder = async () => {
     if (!currentOrder) return;
 
     const alreadyImported = scannedOrders.find(
@@ -77,17 +121,85 @@ export default function ScanOrdersPage() {
       return;
     }
 
-    setScannedOrders([
-      {
-        order: currentOrder,
-        scannedAt: new Date(),
-        imported: true,
-      },
-      ...scannedOrders,
-    ]);
+    setIsSubmitting(true);
+    try {
+      // Save to database
+      const response = await scanOrdersApi.create({
+        orderId: currentOrder.id,
+        deliveryCompany: deliveryCompany || undefined,
+        trackingNumber: trackingNumber || undefined,
+      });
 
-    toast.success(`Order ${currentOrder.orderNumber} imported successfully`);
-    setCurrentOrder(null);
+      if (response.success) {
+        // Play notification sound on success
+        playNotificationSound();
+
+        // Add to local state
+        setScannedOrders([
+          {
+            order: currentOrder,
+            scannedAt: new Date(),
+            imported: true,
+          },
+          ...scannedOrders,
+        ]);
+
+        toast.success(`Order ${currentOrder.orderNumber} imported successfully`);
+        setCurrentOrder(null);
+        setImportDialogOpen(false);
+        setDeliveryCompany("");
+        setTrackingNumber("");
+      } else {
+        toast.error(response.error || "Failed to import order");
+      }
+    } catch {
+      toast.error("An error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleQuickImport = async () => {
+    if (!currentOrder) return;
+
+    const alreadyImported = scannedOrders.find(
+      (s) => s.order.id === currentOrder.id
+    );
+
+    if (alreadyImported) {
+      toast.error("This order has already been imported");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await scanOrdersApi.create({
+        orderId: currentOrder.id,
+      });
+
+      if (response.success) {
+        // Play notification sound on success
+        playNotificationSound();
+
+        setScannedOrders([
+          {
+            order: currentOrder,
+            scannedAt: new Date(),
+            imported: true,
+          },
+          ...scannedOrders,
+        ]);
+
+        toast.success(`Order ${currentOrder.orderNumber} imported successfully`);
+        setCurrentOrder(null);
+      } else {
+        toast.error(response.error || "Failed to import order");
+      }
+    } catch {
+      toast.error("An error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const todayScanned = scannedOrders.filter(
@@ -106,7 +218,7 @@ export default function ScanOrdersPage() {
           Scan Orders
         </h1>
         <p className="text-muted-foreground">
-          Scan order barcodes to import order data
+          Scan order barcodes using keyboard input or camera
         </p>
       </div>
 
@@ -152,13 +264,34 @@ export default function ScanOrdersPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Scanner */}
+        {/* Scanner Section */}
         <div className="space-y-4">
-          <BarcodeScanner
-            onScan={handleBarcodeScan}
-            isLoading={isLoading}
-            placeholder="Scan order barcode..."
-          />
+          <Tabs value={scanMode} onValueChange={(v) => setScanMode(v as "keyboard" | "camera")}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="keyboard" className="flex items-center gap-2">
+                <Keyboard className="h-4 w-4" />
+                Keyboard
+              </TabsTrigger>
+              <TabsTrigger value="camera" className="flex items-center gap-2">
+                <Camera className="h-4 w-4" />
+                Camera
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="keyboard" className="mt-4">
+              <BarcodeScanner
+                onScan={handleBarcodeScan}
+                isLoading={isLoading}
+                placeholder="Scan order barcode..."
+              />
+            </TabsContent>
+            <TabsContent value="camera" className="mt-4">
+              <CameraScanner
+                onScan={handleBarcodeScan}
+                isProcessing={isLoading}
+                title="Order Barcode Scanner"
+              />
+            </TabsContent>
+          </Tabs>
 
           {/* Current Order */}
           {currentOrder && (
@@ -196,7 +329,7 @@ export default function ScanOrdersPage() {
                   </div>
                   <div>
                     <p className="text-muted-foreground">Phone</p>
-                    <p className="font-medium">{currentOrder.customerPhone}</p>
+                    <p className="font-medium">{currentOrder.customerPhone || "N/A"}</p>
                   </div>
                   <div className="col-span-2">
                     <p className="text-muted-foreground">Address</p>
@@ -225,16 +358,32 @@ export default function ScanOrdersPage() {
 
                 <div className="flex gap-2">
                   <Button
-                    className="flex-1"
-                    onClick={handleImportOrder}
-                    disabled={scannedOrders.some(
-                      (s) => s.order.id === currentOrder.id
-                    )}
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    onClick={handleQuickImport}
+                    disabled={
+                      scannedOrders.some((s) => s.order.id === currentOrder.id) ||
+                      isSubmitting
+                    }
                   >
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Import Order
+                    {isSubmitting ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                    )}
+                    Quick Import
                   </Button>
-                  <Button variant="outline" onClick={() => setCurrentOrder(null)}>
+                  <Button
+                    variant="outline"
+                    onClick={() => setImportDialogOpen(true)}
+                    disabled={
+                      scannedOrders.some((s) => s.order.id === currentOrder.id) ||
+                      isSubmitting
+                    }
+                  >
+                    <Truck className="mr-2 h-4 w-4" />
+                    With Details
+                  </Button>
+                  <Button variant="ghost" onClick={() => setCurrentOrder(null)}>
                     Cancel
                   </Button>
                 </div>
@@ -288,6 +437,67 @@ export default function ScanOrdersPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Import with Details Dialog */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Import Order with Details</DialogTitle>
+            <DialogDescription>
+              Add delivery company and tracking information
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {currentOrder && (
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="font-mono font-bold">{currentOrder.orderNumber}</p>
+                <p className="text-sm text-muted-foreground">
+                  {currentOrder.customerName} - {formatDH(currentOrder.total)}
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Delivery Company (Optional)</Label>
+              <Input
+                value={deliveryCompany}
+                onChange={(e) => setDeliveryCompany(e.target.value)}
+                placeholder="e.g., DHL, FedEx, Amana Express"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tracking Number (Optional)</Label>
+              <Input
+                value={trackingNumber}
+                onChange={(e) => setTrackingNumber(e.target.value)}
+                placeholder="Enter tracking number"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setImportDialogOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleImportOrder} disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                "Import Order"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
