@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
       .values({
         orderNumber,
         customerName,
-        customerPhone,
+        customerPhone: customerPhone || null,
         customerAddress,
         customerCity: customerCity || null,
         totalAmount: totalAmount.toString(),

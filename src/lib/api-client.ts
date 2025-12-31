@@ -295,7 +295,7 @@ export const ordersAPI = {
 
   create: async (data: {
     customerName: string;
-    customerPhone: string;
+    customerPhone?: string;
     customerAddress: string;
     customerCity?: string;
     deliveryPrice?: number;
@@ -952,7 +952,7 @@ export const ordersApi = {
       return { success: false, error: 'Order not found' };
     }
   },
-  create: async (data: { customerName: string; customerPhone: string; customerAddress: string; deliveryPrice: number; items: Array<{ productId: string; quantity: number }>; notes?: string }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+  create: async (data: { customerName: string; customerPhone?: string; customerAddress: string; deliveryPrice: number; items: Array<{ productId: string; quantity: number }>; notes?: string }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
     try {
       const result = await ordersAPI.create({
         ...data,
@@ -1408,5 +1408,38 @@ export const dashboardApi = {
       items: [],
     }));
     return { success: true, data: transformedOrders };
+  },
+};
+
+export const scanOrdersApi = {
+  getAll: async () => {
+    const result = await scanOrdersAPI.getAll();
+    return {
+      data: result.scannedOrders,
+      total: result.total,
+      page: result.page,
+      pageSize: result.limit,
+      totalPages: result.totalPages,
+      todayScans: result.todayScans,
+    };
+  },
+  create: async (data: {
+    orderId: string;
+    deliveryCompany?: string;
+    trackingNumber?: string;
+    notes?: string;
+  }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+    try {
+      const result = await scanOrdersAPI.scan({
+        orderId: parseInt(data.orderId),
+        deliveryCompany: data.deliveryCompany,
+        trackingNumber: data.trackingNumber,
+        notes: data.notes,
+      });
+      return { success: true, data: result.scannedOrder, message: result.message };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to scan order';
+      return { success: false, error: message };
+    }
   },
 };

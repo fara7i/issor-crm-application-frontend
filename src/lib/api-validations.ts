@@ -58,7 +58,7 @@ export const orderItemSchema = z.object({
 
 export const createOrderSchema = z.object({
   customerName: z.string().min(1, 'Customer name is required'),
-  customerPhone: z.string().min(1, 'Customer phone is required'),
+  customerPhone: z.string().optional(),
   customerAddress: z.string().min(1, 'Customer address is required'),
   customerCity: z.string().optional(),
   deliveryPrice: z.number().min(0, 'Delivery price cannot be negative').optional(),
