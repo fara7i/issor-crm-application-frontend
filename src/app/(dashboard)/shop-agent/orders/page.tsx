@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Order, OrderStatus, Product } from "@/types";
 import { ordersApi, productsApi } from "@/lib/api-client";
 import { formatDH } from "@/lib/utils";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -35,6 +36,8 @@ import {
   Trash2,
   Package,
   Loader2,
+  Check,
+  Truck,
 } from "lucide-react";
 
 interface CartItem {
@@ -50,6 +53,7 @@ export default function ShopAgentOrdersPage() {
 
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [isDeliveryOrder, setIsDeliveryOrder] = useState(false);
   const [orderFormOpen, setOrderFormOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -59,6 +63,23 @@ export default function ShopAgentOrdersPage() {
   // View order dialog
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
+  // Audio ref for notification sound
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize audio on mount
+  useEffect(() => {
+    audioRef.current = new Audio("/sounds/notification.mp3");
+  }, []);
+
+  const playNotificationSound = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch((error) => {
+        console.warn("Could not play notification sound:", error);
+      });
+    }
+  }, []);
 
   const loadOrders = useCallback(async () => {
     setIsLoading(true);
@@ -131,11 +152,47 @@ export default function ShopAgentOrdersPage() {
     (sum, item) => sum + item.product.sellingPrice * item.quantity,
     0
   );
-  const total = subtotal + deliveryPrice;
+  const total = subtotal + (isDeliveryOrder ? deliveryPrice : 0);
 
-  const handleCreateOrder = async () => {
-    if (!customerName || !customerPhone || !customerAddress) {
-      toast.error("Please fill in all customer details");
+  // Quick create order for in-store sales (no customer details needed)
+  const handleQuickCreateOrder = async () => {
+    if (cart.length === 0) {
+      toast.error("Cart is empty");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await ordersApi.create({
+        items: cart.map((item) => ({
+          productId: item.product.id,
+          quantity: item.quantity,
+        })),
+        customerName: "Walk-in Customer",
+        customerAddress: "In-store",
+        deliveryPrice: 0,
+      });
+
+      if (response.success) {
+        // Play notification sound on success
+        playNotificationSound();
+        toast.success("Order created successfully!");
+        clearCart();
+        loadOrders();
+      } else {
+        toast.error(response.error || "Failed to create order");
+      }
+    } catch {
+      toast.error("An error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Create order with customer details (for delivery)
+  const handleCreateDeliveryOrder = async () => {
+    if (!customerName || !customerAddress) {
+      toast.error("Please fill in customer name and address");
       return;
     }
 
@@ -147,13 +204,15 @@ export default function ShopAgentOrdersPage() {
           quantity: item.quantity,
         })),
         customerName,
-        customerPhone,
+        customerPhone: customerPhone || undefined,
         customerAddress,
         deliveryPrice,
       });
 
       if (response.success) {
-        toast.success("Order created successfully!");
+        // Play notification sound on success
+        playNotificationSound();
+        toast.success("Delivery order created successfully!");
         setOrderFormOpen(false);
         clearCart();
         setCustomerName("");
@@ -200,7 +259,7 @@ export default function ShopAgentOrdersPage() {
           Orders
         </h1>
         <p className="text-muted-foreground">
-          Create and manage customer orders
+          Scan products and create orders quickly
         </p>
       </div>
 
@@ -296,19 +355,59 @@ export default function ShopAgentOrdersPage() {
                   </TableBody>
                 </Table>
 
+                {/* Order Type Toggle */}
+                <div className="mt-4 flex items-center justify-between p-3 bg-muted rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Truck className="h-4 w-4" />
+                    <span className="text-sm font-medium">Delivery Order</span>
+                  </div>
+                  <Switch
+                    checked={isDeliveryOrder}
+                    onCheckedChange={setIsDeliveryOrder}
+                  />
+                </div>
+
+                {/* Totals and Actions */}
                 <div className="mt-4 flex justify-between items-center">
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">
                       Subtotal: {formatDH(subtotal)}
                     </p>
+                    {isDeliveryOrder && (
+                      <p className="text-sm text-muted-foreground">
+                        Delivery: {formatDH(deliveryPrice)}
+                      </p>
+                    )}
                     <p className="text-lg font-bold">
                       Total: {formatDH(total)}
                     </p>
                   </div>
-                  <Button onClick={() => setOrderFormOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Order
-                  </Button>
+                  <div className="flex gap-2">
+                    {isDeliveryOrder ? (
+                      <Button onClick={() => setOrderFormOpen(true)}>
+                        <Truck className="mr-2 h-4 w-4" />
+                        Create Delivery Order
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={handleQuickCreateOrder}
+                        disabled={isSubmitting}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="mr-2 h-4 w-4" />
+                            Quick Sale
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </>
             )}
@@ -327,19 +426,19 @@ export default function ShopAgentOrdersPage() {
         />
       </div>
 
-      {/* Create Order Dialog */}
+      {/* Create Delivery Order Dialog */}
       <Dialog open={orderFormOpen} onOpenChange={setOrderFormOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Create Order</DialogTitle>
+            <DialogTitle>Create Delivery Order</DialogTitle>
             <DialogDescription>
-              Enter customer details to complete the order
+              Enter customer details for delivery
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Customer Name</Label>
+              <Label>Customer Name *</Label>
               <Input
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
@@ -348,7 +447,7 @@ export default function ShopAgentOrdersPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Phone Number</Label>
+              <Label>Phone Number (Optional)</Label>
               <Input
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
@@ -357,7 +456,7 @@ export default function ShopAgentOrdersPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Delivery Address</Label>
+              <Label>Delivery Address *</Label>
               <Input
                 value={customerAddress}
                 onChange={(e) => setCustomerAddress(e.target.value)}
@@ -398,7 +497,7 @@ export default function ShopAgentOrdersPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleCreateOrder} disabled={isSubmitting}>
+            <Button onClick={handleCreateDeliveryOrder} disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -431,7 +530,7 @@ export default function ShopAgentOrdersPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Phone</p>
-                  <p className="font-medium">{selectedOrder.customerPhone}</p>
+                  <p className="font-medium">{selectedOrder.customerPhone || "N/A"}</p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-muted-foreground">Address</p>
