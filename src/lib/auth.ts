@@ -4,7 +4,10 @@ import { db } from '@/db';
 import { users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is not set');
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 const SALT_ROUNDS = 10;
 
 export interface JWTPayload {
