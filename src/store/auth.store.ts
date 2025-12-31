@@ -19,7 +19,7 @@ interface AuthState {
   error: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   loginWithRole: (role: UserRole) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   setLoading: (loading: boolean) => void;
   checkAuth: () => Promise<void>;
 }
@@ -82,7 +82,14 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      logout: () => {
+      logout: async () => {
+        // Call logout API to clear the HTTP-only cookie
+        try {
+          await fetch('/api/auth/logout', { method: 'POST' });
+        } catch (error) {
+          console.error('Logout API error:', error);
+        }
+
         // Remove token from localStorage
         if (typeof window !== 'undefined') {
           localStorage.removeItem('auth_token');

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
@@ -15,50 +14,17 @@ export default function DashboardLayout({
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const { user, isAuthenticated } = useAuthStore();
-  const router = useRouter();
-  const pathname = usePathname();
+  const { checkAuth } = useAuthStore();
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    // Check auth state on mount to sync with cookie
+    checkAuth();
+  }, [checkAuth]);
 
-  useEffect(() => {
-    if (mounted && !isAuthenticated) {
-      router.push("/login");
-      return;
-    }
-
-    // Role-based route protection
-    if (mounted && user) {
-      const pathSegments = pathname.split("/").filter(Boolean);
-      const roleFromPath = pathSegments[0];
-
-      const rolePathMap: Record<string, string[]> = {
-        SUPER_ADMIN: ["super-admin"],
-        ADMIN: ["admin"],
-        SHOP_AGENT: ["shop-agent"],
-        WAREHOUSE_AGENT: ["warehouse-agent"],
-        CONFIRMER: ["confirmer"],
-      };
-
-      const allowedPaths = rolePathMap[user.role] || [];
-
-      if (!allowedPaths.includes(roleFromPath)) {
-        // Redirect to appropriate dashboard
-        const defaultPaths: Record<string, string> = {
-          SUPER_ADMIN: "/super-admin/dashboard",
-          ADMIN: "/admin/dashboard",
-          SHOP_AGENT: "/shop-agent/orders",
-          WAREHOUSE_AGENT: "/warehouse-agent/scan-orders",
-          CONFIRMER: "/confirmer",
-        };
-        router.push(defaultPaths[user.role] || "/login");
-      }
-    }
-  }, [mounted, isAuthenticated, user, router, pathname]);
-
-  if (!mounted || !isAuthenticated || !user) {
+  // Show loading state while hydrating
+  // Note: Middleware handles authentication, this is just for UI hydration
+  if (!mounted) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>

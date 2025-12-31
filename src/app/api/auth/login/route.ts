@@ -46,7 +46,8 @@ export async function POST(request: NextRequest) {
       .where(eq(users.id, foundUser.id))
       .catch(console.error);
 
-    return NextResponse.json({
+    // Create response with token and user
+    const response = NextResponse.json({
       token,
       user: {
         id: foundUser.id,
@@ -55,6 +56,17 @@ export async function POST(request: NextRequest) {
         role: foundUser.role,
       },
     });
+
+    // Set HTTP-only cookie for middleware authentication
+    response.cookies.set('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/',
+    });
+
+    return response;
   } catch (error) {
     return handleApiError(error);
   }
