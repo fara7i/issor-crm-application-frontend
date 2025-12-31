@@ -9,6 +9,7 @@ import {
   decimal,
   pgEnum,
   date,
+  index,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -88,7 +89,11 @@ export const products = pgTable('products', {
   createdBy: integer('created_by').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => ({
+  barcodeIdx: index('products_barcode_idx').on(table.barcode),
+  isActiveIdx: index('products_is_active_idx').on(table.isActive),
+  createdAtIdx: index('products_created_at_idx').on(table.createdAt),
+}));
 
 export const stock = pgTable('stock', {
   id: serial('id').primaryKey(),
@@ -99,7 +104,10 @@ export const stock = pgTable('stock', {
   warehouseLocation: varchar('warehouse_location', { length: 100 }),
   minStockLevel: integer('min_stock_level').default(10),
   lastUpdated: timestamp('last_updated').defaultNow(),
-});
+}, (table) => ({
+  productIdIdx: index('stock_product_id_idx').on(table.productId),
+  quantityIdx: index('stock_quantity_idx').on(table.quantity),
+}));
 
 export const stockHistory = pgTable('stock_history', {
   id: serial('id').primaryKey(),
@@ -119,7 +127,7 @@ export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
   orderNumber: varchar('order_number', { length: 100 }).unique().notNull(),
   customerName: varchar('customer_name', { length: 255 }).notNull(),
-  customerPhone: varchar('customer_phone', { length: 50 }).notNull(),
+  customerPhone: varchar('customer_phone', { length: 50 }),
   customerAddress: text('customer_address').notNull(),
   customerCity: varchar('customer_city', { length: 100 }),
   totalAmount: decimal('total_amount', { precision: 10, scale: 2 }).notNull(),
@@ -130,7 +138,12 @@ export const orders = pgTable('orders', {
   createdBy: integer('created_by').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => ({
+  statusIdx: index('orders_status_idx').on(table.status),
+  paymentStatusIdx: index('orders_payment_status_idx').on(table.paymentStatus),
+  createdAtIdx: index('orders_created_at_idx').on(table.createdAt),
+  createdByIdx: index('orders_created_by_idx').on(table.createdBy),
+}));
 
 export const orderItems = pgTable('order_items', {
   id: serial('id').primaryKey(),
@@ -143,7 +156,10 @@ export const orderItems = pgTable('order_items', {
   quantity: integer('quantity').notNull(),
   unitPrice: decimal('unit_price', { precision: 10, scale: 2 }).notNull(),
   subtotal: decimal('subtotal', { precision: 10, scale: 2 }).notNull(),
-});
+}, (table) => ({
+  orderIdIdx: index('order_items_order_id_idx').on(table.orderId),
+  productIdIdx: index('order_items_product_id_idx').on(table.productId),
+}));
 
 export const salaries = pgTable('salaries', {
   id: serial('id').primaryKey(),
@@ -197,7 +213,11 @@ export const scannedOrders = pgTable('scanned_orders', {
     .notNull(),
   scannedAt: timestamp('scanned_at').defaultNow(),
   notes: text('notes'),
-});
+}, (table) => ({
+  orderIdIdx: index('scanned_orders_order_id_idx').on(table.orderId),
+  scannedByIdx: index('scanned_orders_scanned_by_idx').on(table.scannedBy),
+  scannedAtIdx: index('scanned_orders_scanned_at_idx').on(table.scannedAt),
+}));
 
 export const productDeliveryStats = pgTable('product_delivery_stats', {
   id: serial('id').primaryKey(),
