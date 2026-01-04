@@ -12,15 +12,16 @@ const SALT_ROUNDS = 10;
 
 export interface JWTPayload {
   userId: number;
-  email: string;
+  phone: string;
   role: string;
 }
 
 export interface AuthUser {
   id: number;
-  email: string;
+  phone: string;
   name: string | null;
   role: string;
+  avatarUrl: string | null;
 }
 
 /**
@@ -40,8 +41,8 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 /**
  * Generate a JWT token
  */
-export function generateToken(userId: number, email: string, role: string): string {
-  const payload: JWTPayload = { userId, email, role };
+export function generateToken(userId: number, phone: string, role: string): string {
+  const payload: JWTPayload = { userId, phone, role };
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 }
 
@@ -85,9 +86,10 @@ export async function getCurrentUser(request: Request): Promise<AuthUser | null>
     const user = await db
       .select({
         id: users.id,
-        email: users.email,
+        phone: users.phone,
         name: users.name,
         role: users.role,
+        avatarUrl: users.avatarUrl,
       })
       .from(users)
       .where(eq(users.id, payload.userId))

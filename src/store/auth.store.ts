@@ -6,9 +6,10 @@ type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'SHOP_AGENT' | 'WAREHOUSE_AGENT' | 'CO
 
 interface User {
   id: number;
-  email: string;
+  phone: string;
   name: string | null;
   role: UserRole;
+  avatarUrl: string | null;
 }
 
 interface AuthState {
@@ -17,20 +18,21 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (phone: string, password: string) => Promise<boolean>;
   loginWithRole: (role: UserRole) => Promise<void>;
   logout: () => Promise<void>;
   setLoading: (loading: boolean) => void;
   checkAuth: () => Promise<void>;
+  updateUser: (user: Partial<User>) => void;
 }
 
 // Demo credentials mapping
-const DEMO_CREDENTIALS: Record<UserRole, { email: string; password: string }> = {
-  SUPER_ADMIN: { email: 'superadmin@magazine.ma', password: 'Admin123!' },
-  ADMIN: { email: 'admin@magazine.ma', password: 'Admin123!' },
-  SHOP_AGENT: { email: 'shop@magazine.ma', password: 'Shop123!' },
-  WAREHOUSE_AGENT: { email: 'warehouse@magazine.ma', password: 'Warehouse123!' },
-  CONFIRMER: { email: 'confirmer@magazine.ma', password: 'Confirm123!' },
+const DEMO_CREDENTIALS: Record<UserRole, { phone: string; password: string }> = {
+  SUPER_ADMIN: { phone: '0600000001', password: 'Admin123!' },
+  ADMIN: { phone: '0600000002', password: 'Admin123!' },
+  SHOP_AGENT: { phone: '0600000003', password: 'Shop123!' },
+  WAREHOUSE_AGENT: { phone: '0600000004', password: 'Warehouse123!' },
+  CONFIRMER: { phone: '0600000005', password: 'Confirm123!' },
 };
 
 export const useAuthStore = create<AuthState>()(
@@ -42,11 +44,11 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
       error: null,
 
-      login: async (email: string, password: string) => {
+      login: async (phone: string, password: string) => {
         set({ isLoading: true, error: null });
 
         try {
-          const response = await authAPI.login(email, password);
+          const response = await authAPI.login(phone, password);
 
           // Store token in localStorage for API client to use
           if (typeof window !== 'undefined') {
@@ -78,7 +80,14 @@ export const useAuthStore = create<AuthState>()(
       loginWithRole: async (role: UserRole) => {
         const credentials = DEMO_CREDENTIALS[role];
         if (credentials) {
-          await get().login(credentials.email, credentials.password);
+          await get().login(credentials.phone, credentials.password);
+        }
+      },
+
+      updateUser: (userData: Partial<User>) => {
+        const currentUser = get().user;
+        if (currentUser) {
+          set({ user: { ...currentUser, ...userData } });
         }
       },
 

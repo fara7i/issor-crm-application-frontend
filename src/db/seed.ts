@@ -30,35 +30,35 @@ async function seed() {
     console.log('👤 Seeding users...');
     const usersData = [
       {
-        email: 'superadmin@magazine.ma',
+        phone: '0600000001',
         passwordHash: await hashPassword('Admin123!'),
         role: 'SUPER_ADMIN' as const,
         name: 'Super Admin',
         isActive: true,
       },
       {
-        email: 'admin@magazine.ma',
+        phone: '0600000002',
         passwordHash: await hashPassword('Admin123!'),
         role: 'ADMIN' as const,
         name: 'Admin User',
         isActive: true,
       },
       {
-        email: 'shop@magazine.ma',
+        phone: '0600000003',
         passwordHash: await hashPassword('Shop123!'),
         role: 'SHOP_AGENT' as const,
         name: 'Shop Agent',
         isActive: true,
       },
       {
-        email: 'warehouse@magazine.ma',
+        phone: '0600000004',
         passwordHash: await hashPassword('Warehouse123!'),
         role: 'WAREHOUSE_AGENT' as const,
         name: 'Warehouse Agent',
         isActive: true,
       },
       {
-        email: 'confirmer@magazine.ma',
+        phone: '0600000005',
         passwordHash: await hashPassword('Confirm123!'),
         role: 'CONFIRMER' as const,
         name: 'Confirmer Agent',
@@ -75,7 +75,7 @@ async function seed() {
     console.log(`   ✅ Inserted ${insertedUsers.length} users`);
 
     // Get the super admin user ID for created_by references
-    const superAdminId = insertedUsers.find(u => u.email === 'superadmin@magazine.ma')?.id || 1;
+    const superAdminId = insertedUsers.find(u => u.phone === '0600000001')?.id || 1;
 
     // Seed Products
     console.log('📦 Seeding products...');
@@ -202,47 +202,52 @@ async function seed() {
 
     // Seed Stock for each product
     console.log('📊 Seeding stock...');
-    const stockData = insertedProducts.map((product, index) => ({
-      productId: product.id,
-      quantity: [50, 30, 100, 75, 25, 80, 200, 45, 150, 60][index] || 50,
-      warehouseLocation: `A-${Math.floor(index / 5) + 1}-${(index % 5) + 1}`,
-      minStockLevel: 10,
-    }));
+    if (insertedProducts.length > 0) {
+      const stockData = insertedProducts.map((product, index) => ({
+        productId: product.id,
+        quantity: [50, 30, 100, 75, 25, 80, 200, 45, 150, 60][index] || 50,
+        warehouseLocation: `A-${Math.floor(index / 5) + 1}-${(index % 5) + 1}`,
+        minStockLevel: 10,
+      }));
 
-    const insertedStock = await db
-      .insert(stock)
-      .values(stockData)
-      .onConflictDoNothing()
-      .returning();
+      const insertedStock = await db
+        .insert(stock)
+        .values(stockData)
+        .onConflictDoNothing()
+        .returning();
 
-    console.log(`   ✅ Inserted ${insertedStock.length} stock records`);
+      console.log(`   ✅ Inserted ${insertedStock.length} stock records`);
 
-    // Seed Product Delivery Stats
-    console.log('📈 Seeding product delivery stats...');
-    const statsData = insertedProducts.map(product => ({
-      productId: product.id,
-      totalOrders: 0,
-      deliveredOrders: 0,
-      cancelledOrders: 0,
-      returnedOrders: 0,
-      inTransitOrders: 0,
-    }));
+      // Seed Product Delivery Stats
+      console.log('📈 Seeding product delivery stats...');
+      const statsData = insertedProducts.map(product => ({
+        productId: product.id,
+        totalOrders: 0,
+        deliveredOrders: 0,
+        cancelledOrders: 0,
+        returnedOrders: 0,
+        inTransitOrders: 0,
+      }));
 
-    const insertedStats = await db
-      .insert(productDeliveryStats)
-      .values(statsData)
-      .onConflictDoNothing()
-      .returning();
+      const insertedStats = await db
+        .insert(productDeliveryStats)
+        .values(statsData)
+        .onConflictDoNothing()
+        .returning();
 
-    console.log(`   ✅ Inserted ${insertedStats.length} delivery stats records`);
+      console.log(`   ✅ Inserted ${insertedStats.length} delivery stats records`);
+    } else {
+      console.log('   ⏭️ Skipped stock seeding (no new products)');
+      console.log('   ⏭️ Skipped delivery stats seeding (no new products)');
+    }
 
     console.log('\n✅ Database seeding completed successfully!\n');
-    console.log('📝 Default Login Credentials:');
-    console.log('   Super Admin: superadmin@magazine.ma / Admin123!');
-    console.log('   Admin: admin@magazine.ma / Admin123!');
-    console.log('   Shop Agent: shop@magazine.ma / Shop123!');
-    console.log('   Warehouse Agent: warehouse@magazine.ma / Warehouse123!');
-    console.log('   Confirmer: confirmer@magazine.ma / Confirm123!');
+    console.log('📝 Default Login Credentials (Phone / Password):');
+    console.log('   Super Admin: 0600000001 / Admin123!');
+    console.log('   Admin: 0600000002 / Admin123!');
+    console.log('   Shop Agent: 0600000003 / Shop123!');
+    console.log('   Warehouse Agent: 0600000004 / Warehouse123!');
+    console.log('   Confirmer: 0600000005 / Confirm123!');
 
   } catch (error) {
     console.error('❌ Error seeding database:', error);

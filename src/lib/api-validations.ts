@@ -2,24 +2,32 @@ import { z } from 'zod';
 
 // Auth schemas
 export const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
+  phone: z.string().min(1, 'Phone number is required'),
   password: z.string().min(1, 'Password is required'),
 });
 
 // User schemas
 export const createUserSchema = z.object({
-  email: z.string().email('Invalid email address'),
+  phone: z.string().min(1, 'Phone number is required'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   name: z.string().min(1, 'Name is required'),
   role: z.enum(['SUPER_ADMIN', 'ADMIN', 'SHOP_AGENT', 'WAREHOUSE_AGENT', 'CONFIRMER']),
 });
 
 export const updateUserSchema = z.object({
-  email: z.string().email('Invalid email address').optional(),
+  phone: z.string().min(1, 'Phone number is required').optional(),
   password: z.string().min(6, 'Password must be at least 6 characters').optional(),
   name: z.string().min(1, 'Name is required').optional(),
+  avatarUrl: z.string().optional().nullable(),
   role: z.enum(['SUPER_ADMIN', 'ADMIN', 'SHOP_AGENT', 'WAREHOUSE_AGENT', 'CONFIRMER']).optional(),
   isActive: z.boolean().optional(),
+});
+
+// Profile update schema (for user settings)
+export const updateProfileSchema = z.object({
+  name: z.string().min(1, 'Name is required').optional(),
+  password: z.string().min(6, 'Password must be at least 6 characters').optional(),
+  avatarUrl: z.string().optional().nullable(),
 });
 
 // Product schemas

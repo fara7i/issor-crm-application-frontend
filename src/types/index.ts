@@ -8,10 +8,10 @@ export type UserRole =
 
 export interface User {
   id: string;
-  email: string;
+  phone: string;
   name: string;
   role: UserRole;
-  avatar?: string;
+  avatarUrl?: string | null;
   createdAt: Date;
   lastLogin?: Date;
 }
@@ -249,16 +249,17 @@ export interface TopProduct {
 export interface AdminUser {
   id: string;
   name: string;
-  email: string;
+  phone: string;
   role: UserRole;
   status: "ACTIVE" | "INACTIVE";
+  avatarUrl?: string | null;
   createdAt: Date;
   lastLogin?: Date;
 }
 
 export interface AdminFormData {
   name: string;
-  email: string;
+  phone: string;
   password: string;
 }
 

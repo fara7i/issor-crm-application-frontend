@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { UserRole } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -18,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Package,
-  Mail,
+  Phone,
   Lock,
   Loader2,
   Shield,
@@ -34,7 +33,7 @@ const roleConfig: Record<
     title: string;
     description: string;
     icon: React.ComponentType<{ className?: string }>;
-    email: string;
+    phone: string;
     redirect: string;
   }
 > = {
@@ -42,43 +41,42 @@ const roleConfig: Record<
     title: "Super Admin",
     description: "Full access to all features",
     icon: ShieldCheck,
-    email: "superadmin@magazine.ma",
+    phone: "0600000001",
     redirect: "/super-admin/dashboard",
   },
   ADMIN: {
     title: "Admin",
     description: "Manage products, stock & finances",
     icon: Shield,
-    email: "admin@magazine.ma",
+    phone: "0600000002",
     redirect: "/admin/dashboard",
   },
   SHOP_AGENT: {
     title: "Shop Agent",
     description: "Handle orders & sales",
     icon: Store,
-    email: "shop@magazine.ma",
+    phone: "0600000003",
     redirect: "/shop-agent/orders",
   },
   WAREHOUSE_AGENT: {
     title: "Warehouse Agent",
     description: "Scan & manage inventory",
     icon: Warehouse,
-    email: "warehouse@magazine.ma",
+    phone: "0600000004",
     redirect: "/warehouse-agent/scan-orders",
   },
   CONFIRMER: {
     title: "Confirmer",
     description: "Confirm orders",
     icon: CheckCircle2,
-    email: "confirmer@magazine.ma",
+    phone: "0600000005",
     redirect: "/confirmer",
   },
 };
 
 export default function LoginPage() {
-  const router = useRouter();
   const { login, loginWithRole, isAuthenticated, isLoading } = useAuthStore();
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [mounted, setMounted] = useState(false);
 
@@ -88,34 +86,36 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (mounted && isAuthenticated) {
-      router.push("/super-admin/dashboard");
+      // Use native browser navigation for immediate redirect
+      window.location.href = "/super-admin/dashboard";
     }
-  }, [mounted, isAuthenticated, router]);
+  }, [mounted, isAuthenticated]);
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
+  const handlePhoneLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) {
-      toast.error("Please enter your email");
+    if (!phone) {
+      toast.error("Please enter your phone number");
       return;
     }
 
-    const success = await login(email, password);
+    const success = await login(phone, password);
     if (success) {
       toast.success("Login successful!");
-      // Get the user role and redirect
+      // Get the user role and redirect using native browser navigation
       const user = useAuthStore.getState().user;
       if (user) {
-        router.push(roleConfig[user.role].redirect);
+        window.location.href = roleConfig[user.role].redirect;
       }
     } else {
       toast.error("Invalid credentials. Try using one of the demo accounts.");
     }
   };
 
-  const handleQuickLogin = (role: UserRole) => {
-    loginWithRole(role);
+  const handleQuickLogin = async (role: UserRole) => {
+    await loginWithRole(role);
     toast.success(`Logged in as ${roleConfig[role].title}`);
-    router.push(roleConfig[role].redirect);
+    // Use native browser navigation for immediate redirect
+    window.location.href = roleConfig[role].redirect;
   };
 
   if (!mounted) {
@@ -143,7 +143,7 @@ export default function LoginPage() {
             <CardHeader className="pb-4">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="demo">Quick Demo</TabsTrigger>
-                <TabsTrigger value="email">Email Login</TabsTrigger>
+                <TabsTrigger value="phone">Phone Login</TabsTrigger>
               </TabsList>
             </CardHeader>
 
@@ -181,18 +181,18 @@ export default function LoginPage() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="email" className="mt-0">
-                <form onSubmit={handleEmailLogin} className="space-y-4">
+              <TabsContent value="phone" className="mt-0">
+                <form onSubmit={handlePhoneLogin} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="phone">Phone Number</Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
-                        id="email"
-                        type="email"
-                        placeholder="your@email.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        id="phone"
+                        type="tel"
+                        placeholder="0600000000"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
                         className="pl-10"
                       />
                     </div>
@@ -227,7 +227,7 @@ export default function LoginPage() {
 
                 <div className="mt-4 p-3 bg-muted rounded-lg">
                   <p className="text-xs text-muted-foreground text-center mb-2">
-                    Demo accounts (any password):
+                    Demo accounts (use the password shown):
                   </p>
                   <div className="text-xs space-y-1">
                     {(Object.keys(roleConfig) as UserRole[]).map((role) => (
@@ -238,9 +238,9 @@ export default function LoginPage() {
                         <button
                           type="button"
                           className="font-mono text-primary hover:underline"
-                          onClick={() => setEmail(roleConfig[role].email)}
+                          onClick={() => setPhone(roleConfig[role].phone)}
                         >
-                          {roleConfig[role].email}
+                          {roleConfig[role].phone}
                         </button>
                       </div>
                     ))}

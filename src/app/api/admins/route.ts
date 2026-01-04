@@ -44,10 +44,11 @@ export async function GET(request: NextRequest) {
     const adminsList = await db
       .select({
         id: users.id,
-        email: users.email,
+        phone: users.phone,
         name: users.name,
         role: users.role,
         isActive: users.isActive,
+        avatarUrl: users.avatarUrl,
         createdAt: users.createdAt,
         updatedAt: users.updatedAt,
       })
@@ -88,17 +89,17 @@ export async function POST(request: NextRequest) {
       return badRequest('Validation error', validation.errors.errors);
     }
 
-    const { email, password, name, role } = validation.data;
+    const { phone, password, name, role } = validation.data;
 
-    // Check for duplicate email
+    // Check for duplicate phone
     const existingUser = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.email, email))
+      .where(eq(users.phone, phone))
       .limit(1);
 
     if (existingUser.length > 0) {
-      return conflict('A user with this email already exists');
+      return conflict('A user with this phone number already exists');
     }
 
     // Hash password
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
     const newUser = await db
       .insert(users)
       .values({
-        email,
+        phone,
         passwordHash,
         name,
         role,
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
       })
       .returning({
         id: users.id,
-        email: users.email,
+        phone: users.phone,
         name: users.name,
         role: users.role,
         isActive: users.isActive,

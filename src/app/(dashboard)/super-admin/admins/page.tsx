@@ -94,7 +94,7 @@ export default function AdminsPage() {
 
   // Form state
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("ADMIN");
 
@@ -116,7 +116,7 @@ export default function AdminsPage() {
 
   const resetForm = () => {
     setName("");
-    setEmail("");
+    setPhone("");
     setPassword("");
     setRole("ADMIN");
     setSelectedAdmin(null);
@@ -130,7 +130,7 @@ export default function AdminsPage() {
   const handleEdit = (admin: AdminUser) => {
     setSelectedAdmin(admin);
     setName(admin.name);
-    setEmail(admin.email);
+    setPhone(admin.phone);
     setPassword("");
     setRole(admin.role);
     setFormOpen(true);
@@ -146,9 +146,9 @@ export default function AdminsPage() {
     setIsSubmitting(true);
 
     try {
-      const data: { name: string; email: string; password?: string; role?: string } = {
+      const data: { name: string; phone: string; password?: string; role?: string } = {
         name,
-        email,
+        phone,
         role,
       };
 
@@ -235,7 +235,7 @@ export default function AdminsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>User</TableHead>
-                <TableHead>Email</TableHead>
+                <TableHead>Phone</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
@@ -281,7 +281,7 @@ export default function AdminsPage() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{admin.email}</TableCell>
+                    <TableCell>{admin.phone}</TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
@@ -374,12 +374,12 @@ export default function AdminsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Email</Label>
+              <Label>Phone Number</Label>
               <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter email"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Enter phone number"
                 required
               />
             </div>

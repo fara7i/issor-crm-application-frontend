@@ -67,10 +67,11 @@ export const adPlatformEnum = pgEnum('ad_platform', [
 // Tables
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  email: varchar('email', { length: 255 }).unique().notNull(),
+  phone: varchar('phone', { length: 50 }).unique().notNull(),
   passwordHash: text('password_hash').notNull(),
   role: userRoleEnum('role').notNull().default('SHOP_AGENT'),
   name: varchar('name', { length: 255 }),
+  avatarUrl: text('avatar_url'),
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -135,6 +136,7 @@ export const orders = pgTable('orders', {
   status: orderStatusEnum('status').default('PENDING'),
   paymentStatus: paymentStatusEnum('payment_status').default('UNPAID'),
   notes: text('notes'),
+  isFromShop: boolean('is_from_shop').default(false),
   createdBy: integer('created_by').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -143,6 +145,7 @@ export const orders = pgTable('orders', {
   paymentStatusIdx: index('orders_payment_status_idx').on(table.paymentStatus),
   createdAtIdx: index('orders_created_at_idx').on(table.createdAt),
   createdByIdx: index('orders_created_by_idx').on(table.createdBy),
+  isFromShopIdx: index('orders_is_from_shop_idx').on(table.isFromShop),
 }));
 
 export const orderItems = pgTable('order_items', {

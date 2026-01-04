@@ -12,7 +12,7 @@ const getJwtSecret = () => {
 
 interface JWTPayload {
   userId: number;
-  email: string;
+  phone: string;
   role: string;
 }
 
@@ -109,7 +109,7 @@ export async function middleware(request: NextRequest) {
       // Add user info to request headers for server components
       const requestHeaders = new Headers(request.headers);
       requestHeaders.set('x-user-id', String(jwtPayload.userId));
-      requestHeaders.set('x-user-email', jwtPayload.email);
+      requestHeaders.set('x-user-phone', jwtPayload.phone);
       requestHeaders.set('x-user-role', jwtPayload.role);
 
       return NextResponse.next({

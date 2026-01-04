@@ -31,10 +31,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const foundUser = await db
       .select({
         id: users.id,
-        email: users.email,
+        phone: users.phone,
         name: users.name,
         role: users.role,
         isActive: users.isActive,
+        avatarUrl: users.avatarUrl,
         createdAt: users.createdAt,
         updatedAt: users.updatedAt,
       })
@@ -88,27 +89,28 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return badRequest('Validation error', validation.errors.errors);
     }
 
-    const { email, password, name, role, isActive } = validation.data;
+    const { phone, password, name, role, isActive, avatarUrl } = validation.data;
 
-    // Check for duplicate email if changed
-    if (email && email !== existingUser[0].email) {
-      const duplicateEmail = await db
+    // Check for duplicate phone if changed
+    if (phone && phone !== existingUser[0].phone) {
+      const duplicatePhone = await db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.email, email))
+        .where(eq(users.phone, phone))
         .limit(1);
 
-      if (duplicateEmail.length > 0) {
-        return conflict('A user with this email already exists');
+      if (duplicatePhone.length > 0) {
+        return conflict('A user with this phone number already exists');
       }
     }
 
     // Build update data
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
-    if (email !== undefined) updateData.email = email;
+    if (phone !== undefined) updateData.phone = phone;
     if (name !== undefined) updateData.name = name;
     if (role !== undefined) updateData.role = role;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
     if (password) {
       updateData.passwordHash = await hashPassword(password);
     }
@@ -119,10 +121,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       .where(eq(users.id, userId))
       .returning({
         id: users.id,
-        email: users.email,
+        phone: users.phone,
         name: users.name,
         role: users.role,
         isActive: users.isActive,
+        avatarUrl: users.avatarUrl,
         createdAt: users.createdAt,
         updatedAt: users.updatedAt,
       });

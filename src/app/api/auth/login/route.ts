@@ -16,17 +16,17 @@ export async function POST(request: NextRequest) {
       return badRequest('Validation error', validation.errors.errors);
     }
 
-    const { email, password } = validation.data;
+    const { phone, password } = validation.data;
 
-    // Find user by email
+    // Find user by phone
     const user = await db
       .select()
       .from(users)
-      .where(and(eq(users.email, email), eq(users.isActive, true)))
+      .where(and(eq(users.phone, phone), eq(users.isActive, true)))
       .limit(1);
 
     if (user.length === 0) {
-      return unauthorized('Invalid email or password');
+      return unauthorized('Invalid phone number or password');
     }
 
     const foundUser = user[0];
@@ -34,11 +34,11 @@ export async function POST(request: NextRequest) {
     // Verify password
     const isValidPassword = await verifyPassword(password, foundUser.passwordHash);
     if (!isValidPassword) {
-      return unauthorized('Invalid email or password');
+      return unauthorized('Invalid phone number or password');
     }
 
     // Generate JWT token
-    const token = generateToken(foundUser.id, foundUser.email, foundUser.role);
+    const token = generateToken(foundUser.id, foundUser.phone, foundUser.role);
 
     // Update last login (we won't block on this)
     db.update(users)
@@ -51,9 +51,10 @@ export async function POST(request: NextRequest) {
       token,
       user: {
         id: foundUser.id,
-        email: foundUser.email,
+        phone: foundUser.phone,
         name: foundUser.name,
         role: foundUser.role,
+        avatarUrl: foundUser.avatarUrl,
       },
     });
 

@@ -50,16 +50,23 @@ async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise
 
 // ============ AUTH API ============
 export const authAPI = {
-  login: async (email: string, password: string) => {
-    return fetchAPI<{ token: string; user: { id: number; email: string; name: string; role: string } }>(
+  login: async (phone: string, password: string) => {
+    return fetchAPI<{ token: string; user: { id: number; phone: string; name: string; role: string; avatarUrl: string | null } }>(
       '/api/auth/login',
-      { method: 'POST', body: JSON.stringify({ email, password }) }
+      { method: 'POST', body: JSON.stringify({ phone, password }) }
     );
   },
 
   getMe: async () => {
-    return fetchAPI<{ user: { id: number; email: string; name: string; role: string } }>(
+    return fetchAPI<{ user: { id: number; phone: string; name: string; role: string; avatarUrl: string | null } }>(
       '/api/auth/me'
+    );
+  },
+
+  updateProfile: async (data: { name?: string; password?: string; avatarUrl?: string | null }) => {
+    return fetchAPI<{ user: { id: number; phone: string; name: string; role: string; avatarUrl: string | null } }>(
+      '/api/auth/profile',
+      { method: 'PUT', body: JSON.stringify(data) }
     );
   },
 };
@@ -565,10 +572,11 @@ export const adminsAPI = {
     return fetchAPI<{
       admins: Array<{
         id: number;
-        email: string;
+        phone: string;
         name: string | null;
         role: string;
         isActive: boolean;
+        avatarUrl: string | null;
         createdAt: string;
         updatedAt: string;
       }>;
@@ -580,7 +588,7 @@ export const adminsAPI = {
   },
 
   create: async (data: {
-    email: string;
+    phone: string;
     password: string;
     name: string;
     role: string;
@@ -592,11 +600,12 @@ export const adminsAPI = {
   },
 
   update: async (id: number, data: Partial<{
-    email: string;
+    phone: string;
     password: string;
     name: string;
     role: string;
     isActive: boolean;
+    avatarUrl: string | null;
   }>) => {
     return fetchAPI<{ admin: unknown }>(`/api/admins/${id}`, {
       method: 'PUT',
@@ -1288,9 +1297,10 @@ export const adminsApi = {
     const transformedAdmins = result.admins.map(admin => ({
       id: String(admin.id),
       name: admin.name || '',
-      email: admin.email,
+      phone: admin.phone,
       role: admin.role as 'SUPER_ADMIN' | 'ADMIN' | 'SHOP_AGENT' | 'WAREHOUSE_AGENT' | 'CONFIRMER',
       status: admin.isActive ? 'ACTIVE' as const : 'INACTIVE' as const,
+      avatarUrl: admin.avatarUrl,
       createdAt: new Date(admin.createdAt),
       lastLogin: undefined,
     }));
@@ -1302,11 +1312,11 @@ export const adminsApi = {
       totalPages: result.totalPages,
     };
   },
-  create: async (data: { name: string; email: string; password: string; role?: string }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+  create: async (data: { name: string; phone: string; password: string; role?: string }): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
     try {
       const result = await adminsAPI.create({
         name: data.name,
-        email: data.email,
+        phone: data.phone,
         password: data.password,
         role: data.role || 'ADMIN',
       });
@@ -1316,7 +1326,7 @@ export const adminsApi = {
       return { success: false, error: message };
     }
   },
-  update: async (id: string, data: Partial<{ name: string; email: string; password: string; role: string }>): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
+  update: async (id: string, data: Partial<{ name: string; phone: string; password: string; role: string }>): Promise<{ success: boolean; data?: unknown; message?: string; error?: string }> => {
     try {
       const result = await adminsAPI.update(parseInt(id), data);
       return { success: true, data: result.admin, message: 'User updated successfully' };

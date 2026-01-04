@@ -13,9 +13,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       user: {
         id: user.id,
-        email: user.email,
+        phone: user.phone,
         name: user.name,
         role: user.role,
+        avatarUrl: user.avatarUrl,
       },
     });
   } catch (error) {
