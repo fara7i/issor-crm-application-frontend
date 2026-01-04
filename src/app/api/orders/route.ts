@@ -205,6 +205,9 @@ export async function POST(request: NextRequest) {
     const totalAmount = subtotal + (deliveryPrice || 0);
     const orderNumber = await generateOrderNumber();
 
+    // Check if order is from shop agent
+    const isFromShop = user.role === 'SHOP_AGENT';
+
     // Create order
     const newOrder = await db
       .insert(orders)
@@ -217,8 +220,9 @@ export async function POST(request: NextRequest) {
         totalAmount: totalAmount.toString(),
         deliveryPrice: (deliveryPrice || 0).toString(),
         status: 'PENDING',
-        paymentStatus: 'UNPAID',
+        paymentStatus: isFromShop ? 'PAID' : 'UNPAID',
         notes: notes || null,
+        isFromShop,
         createdBy: user.id,
       })
       .returning();
