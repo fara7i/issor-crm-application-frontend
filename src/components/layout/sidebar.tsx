@@ -22,6 +22,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Settings,
 } from "lucide-react";
 
 interface NavItem {
@@ -198,38 +199,59 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* User Profile */}
         <div className="border-t border-white/10 p-4">
           {user && (
-            <div
-              className={cn(
-                "flex items-center gap-3",
-                collapsed && "justify-center"
-              )}
-            >
-              <Avatar className="h-9 w-9">
-                <AvatarImage src={undefined} alt={user.name || ''} />
-                <AvatarFallback className="bg-primary text-primary-foreground">
-                  {(user.name || 'U')
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </AvatarFallback>
-              </Avatar>
+            <div className="space-y-3">
+              <Link
+                href={`${getBasePath()}/settings`}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-white/10",
+                  collapsed && "justify-center"
+                )}
+              >
+                <Avatar className="h-9 w-9">
+                  <AvatarImage src={user.avatarUrl || undefined} alt={user.name || ''} />
+                  <AvatarFallback className="bg-primary text-primary-foreground">
+                    {(user.name || 'U')
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")}
+                  </AvatarFallback>
+                </Avatar>
+                {!collapsed && (
+                  <div className="flex-1 overflow-hidden">
+                    <p className="truncate text-sm font-medium">{user.name || 'User'}</p>
+                    <p className="truncate text-xs text-sidebar-foreground/60">
+                      {user.role.replace("_", " ")}
+                    </p>
+                  </div>
+                )}
+              </Link>
               {!collapsed && (
-                <div className="flex-1 overflow-hidden">
-                  <p className="truncate text-sm font-medium">{user.name || 'User'}</p>
-                  <p className="truncate text-xs text-sidebar-foreground/60">
-                    {user.role.replace("_", " ")}
-                  </p>
+                <div className="flex gap-2">
+                  <Link
+                    href={`${getBasePath()}/settings`}
+                    className="flex-1"
+                  >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-sidebar-foreground/80 hover:bg-white/10 hover:text-sidebar-foreground"
+                    >
+                      <Settings className="mr-2 h-4 w-4" />
+                      Settings
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      logout();
+                      window.location.href = '/login';
+                    }}
+                    className="h-8 w-8 text-sidebar-foreground/80 hover:bg-white/10 hover:text-sidebar-foreground"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </Button>
                 </div>
-              )}
-              {!collapsed && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={logout}
-                  className="h-8 w-8 text-sidebar-foreground/80 hover:bg-white/10 hover:text-sidebar-foreground"
-                >
-                  <LogOut className="h-4 w-4" />
-                </Button>
               )}
             </div>
           )}
