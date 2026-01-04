@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Product } from "@/types";
 import { formatDH, formatDate } from "@/lib/utils";
 import {
@@ -57,12 +58,14 @@ export function BarcodeDisplay({
         <div className="space-y-6">
           {/* Product Info */}
           <div className="flex gap-4">
-            <div className="h-20 w-20 rounded-lg bg-muted flex items-center justify-center shrink-0">
+            <div className="relative h-20 w-20 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">
               {product.imageUrl ? (
-                <img
+                <Image
                   src={product.imageUrl}
                   alt={product.name}
-                  className="h-20 w-20 rounded-lg object-cover"
+                  fill
+                  className="rounded-lg object-cover"
+                  unoptimized
                 />
               ) : (
                 <Package className="h-10 w-10 text-muted-foreground" />

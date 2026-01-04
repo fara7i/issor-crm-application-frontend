@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Stock } from "@/types";
 import { cn, formatDate } from "@/lib/utils";
 import {
@@ -185,12 +186,14 @@ export function StockTable({
                 return (
                   <TableRow key={stockItem.id}>
                     <TableCell>
-                      <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                      <div className="relative h-10 w-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                         {stockItem.product.imageUrl ? (
-                          <img
+                          <Image
                             src={stockItem.product.imageUrl}
                             alt={stockItem.product.name}
-                            className="h-10 w-10 rounded-lg object-cover"
+                            fill
+                            className="rounded-lg object-cover"
+                            unoptimized
                           />
                         ) : (
                           <Package className="h-5 w-5 text-muted-foreground" />

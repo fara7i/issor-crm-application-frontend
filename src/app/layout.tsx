@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -12,6 +12,11 @@ const geistMono = localFont({
   variable: "--font-geist-mono",
   weight: "100 900",
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 export const metadata: Metadata = {
   title: {
@@ -29,7 +34,6 @@ export const metadata: Metadata = {
     "orders",
   ],
   authors: [{ name: "Magazine Team" }],
-  viewport: "width=device-width, initial-scale=1",
   robots: "noindex, nofollow",
 };
 

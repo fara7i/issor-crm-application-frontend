@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import Image from "next/image";
 import { Stock } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +16,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Package, Plus, Minus, Loader2 } from "lucide-react";
-import { useState } from "react";
 
 interface StockFormProps {
   open: boolean;
@@ -85,12 +86,14 @@ export function StockForm({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Product Info */}
           <div className="flex items-center gap-4 p-4 rounded-lg bg-muted">
-            <div className="h-12 w-12 rounded-lg bg-background flex items-center justify-center">
+            <div className="relative h-12 w-12 rounded-lg bg-background flex items-center justify-center overflow-hidden">
               {stock.product.imageUrl ? (
-                <img
+                <Image
                   src={stock.product.imageUrl}
                   alt={stock.product.name}
-                  className="h-12 w-12 rounded-lg object-cover"
+                  fill
+                  className="rounded-lg object-cover"
+                  unoptimized
                 />
               ) : (
                 <Package className="h-6 w-6 text-muted-foreground" />

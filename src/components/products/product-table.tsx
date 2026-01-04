@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Product } from "@/types";
 import { formatDH, formatDate, cn } from "@/lib/utils";
 import { productCategories } from "@/lib/mock-data";
@@ -269,12 +270,14 @@ export function ProductTable({
                       />
                     </TableCell>
                     <TableCell>
-                      <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                      <div className="relative h-10 w-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                         {product.imageUrl ? (
-                          <img
+                          <Image
                             src={product.imageUrl}
                             alt={product.name}
-                            className="h-10 w-10 rounded-lg object-cover"
+                            fill
+                            className="rounded-lg object-cover"
+                            unoptimized
                           />
                         ) : (
                           <Package className="h-5 w-5 text-muted-foreground" />
