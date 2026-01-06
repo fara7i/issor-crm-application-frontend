@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,7 @@ import {
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { UserRole } from "@/types";
+import { toast } from "sonner";
 
 interface NavItem {
   title: string;
@@ -113,12 +114,13 @@ interface HeaderProps {
 
 export function Header({ sidebarCollapsed }: HeaderProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const { user, logout } = useAuthStore();
 
-  const handleLogout = () => {
-    logout();
-    router.push("/login");
+  const handleLogout = async () => {
+    await logout();
+    toast.success("Logged out successfully");
+    // Use hard redirect to clear all React state
+    window.location.href = "/login";
   };
 
   const filteredNavItems = navItems.filter((item) =>

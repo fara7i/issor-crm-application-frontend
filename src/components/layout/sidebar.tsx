@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
 import { UserRole } from "@/types";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -243,8 +244,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => {
-                      logout();
+                    onClick={async () => {
+                      await logout();
+                      toast.success("Logged out successfully");
                       window.location.href = '/login';
                     }}
                     className="h-8 w-8 text-sidebar-foreground/80 hover:bg-white/10 hover:text-sidebar-foreground"
